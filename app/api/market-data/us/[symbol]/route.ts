@@ -29,6 +29,44 @@ type TwelveQuoteResponse = {
   message?: string;
 };
 
+type YahooChartPeriod = {
+  start: number;
+  end: number;
+  gmtoffset: number;
+  timezone: string;
+};
+
+type YahooChartMeta = {
+  regularMarketTime?: number;
+  regularMarketPrice?: number;
+  previousClose?: number;
+  exchangeName?: string;
+  currentTradingPeriod?: {
+    pre?: YahooChartPeriod;
+    regular?: YahooChartPeriod;
+    post?: YahooChartPeriod;
+  };
+};
+
+type YahooChartQuote = {
+  close?: Array<number | null>;
+};
+
+type YahooChartResult = {
+  meta?: YahooChartMeta;
+  timestamp?: number[];
+  indicators?: {
+    quote?: YahooChartQuote[];
+  };
+};
+
+type YahooChartResponse = {
+  chart?: {
+    result?: YahooChartResult[];
+    error?: { description?: string } | null;
+  };
+};
+
 export const dynamic = "force-dynamic";
 
 function parseNumber(value: string | number | undefined) {
@@ -56,6 +94,61 @@ async function fetchQuote(symbol: string, apiKey: string) {
   return (await regularResponse.json()) as TwelveQuoteResponse;
 }
 
+async function fetchYahooExtendedQuote(symbol: string) {
+  const response = await fetch(
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1m&range=1d&includePrePost=true&events=div%2Csplits`,
+    { cache: "no-store" }
+  );
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const data = (await response.json()) as YahooChartResponse;
+  const result = data.chart?.result?.[0];
+  const timestamps = result?.timestamp ?? [];
+  const closes = result?.indicators?.quote?.[0]?.close ?? [];
+  const meta = result?.meta;
+
+  if (!meta || timestamps.length === 0 || closes.length === 0) {
+    return null;
+  }
+
+  let latestPrice: number | null = null;
+  let latestTimestamp: number | null = null;
+
+  for (let index = closes.length - 1; index >= 0; index -= 1) {
+    const close = closes[index];
+    const timestamp = timestamps[index];
+    if (typeof close === "number" && Number.isFinite(close) && typeof timestamp === "number") {
+      latestPrice = close;
+      latestTimestamp = timestamp;
+      break;
+    }
+  }
+
+  if (latestPrice === null || latestTimestamp === null) {
+    return null;
+  }
+
+  const regular = meta.currentTradingPeriod?.regular;
+  const pre = meta.currentTradingPeriod?.pre;
+  const post = meta.currentTradingPeriod?.post;
+  const isExtendedHours =
+    (pre ? latestTimestamp >= pre.start && latestTimestamp < pre.end : false) ||
+    (post ? latestTimestamp >= post.start && latestTimestamp < post.end : false);
+  const isMarketOpen = regular ? latestTimestamp >= regular.start && latestTimestamp < regular.end : false;
+
+  return {
+    price: latestPrice,
+    timestamp: new Date(latestTimestamp * 1000).toISOString(),
+    isExtendedHours,
+    isMarketOpen,
+    source: meta.exchangeName ? `yahoo-finance-unofficial:${meta.exchangeName}` : "yahoo-finance-unofficial",
+    previousClose: typeof meta.previousClose === "number" && Number.isFinite(meta.previousClose) ? meta.previousClose : null,
+  };
+}
+
 export async function GET(request: Request, { params }: { params: Promise<{ symbol: string }> }) {
   const apiKey = process.env.TWELVE_DATA_API_KEY;
   if (!apiKey) {
@@ -66,12 +159,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ symb
   const url = new URL(request.url);
   const count = Number(url.searchParams.get("count") ?? "200");
 
-  const [seriesResponse, quoteData] = await Promise.all([
+  const [seriesResponse, quoteData, yahooQuote] = await Promise.all([
     fetch(
       `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=4h&outputsize=${count}&order=asc&timezone=America/New_York&apikey=${encodeURIComponent(apiKey)}`,
       { cache: "no-store" }
     ),
     fetchQuote(symbol, apiKey),
+    fetchYahooExtendedQuote(symbol),
   ]);
 
   if (!seriesResponse.ok) {
@@ -103,23 +197,41 @@ export async function GET(request: Request, { params }: { params: Promise<{ symb
       ? new Date(quoteData.datetime.replace(" ", "T")).toISOString()
       : candles.at(-1)?.time ?? new Date().toISOString();
 
+  const shouldUseYahooQuote =
+    yahooQuote &&
+    (yahooQuote.isExtendedHours ||
+      new Date(yahooQuote.timestamp).getTime() > new Date(latestTimestamp).getTime());
+
+  const finalPrice = shouldUseYahooQuote ? yahooQuote.price : parseNumber(quoteData.close ?? candles.at(-1)?.close);
+  const finalTimestamp = shouldUseYahooQuote ? yahooQuote.timestamp : latestTimestamp;
+  const finalSource = shouldUseYahooQuote
+    ? `${yahooQuote.source}${yahooQuote.isExtendedHours ? ":extended" : ""}`
+    : quoteData.exchange
+      ? `twelve-data:${quoteData.exchange}${quoteData.is_extended_hours ? ":extended" : ""}`
+      : quoteData.is_extended_hours
+        ? "twelve-data:extended"
+        : "twelve-data";
+  const finalIsMarketOpen = shouldUseYahooQuote ? yahooQuote.isMarketOpen : Boolean(quoteData.is_market_open);
+  const finalIsExtendedHours = shouldUseYahooQuote ? yahooQuote.isExtendedHours : Boolean(quoteData.is_extended_hours);
+  const finalPreviousClose = shouldUseYahooQuote
+    ? (yahooQuote.previousClose ?? (quoteData.previous_close ? parseNumber(quoteData.previous_close) : null))
+    : quoteData.previous_close
+      ? parseNumber(quoteData.previous_close)
+      : null;
+
   return NextResponse.json({
     symbol,
     timeframe: "240m",
     candles,
     quote: {
       assetCode: symbol,
-      price: parseNumber(quoteData.close ?? candles.at(-1)?.close),
+      price: finalPrice,
       currency: "USD",
-      timestamp: latestTimestamp,
-      source: quoteData.exchange
-        ? `twelve-data:${quoteData.exchange}${quoteData.is_extended_hours ? ":extended" : ""}`
-        : quoteData.is_extended_hours
-          ? "twelve-data:extended"
-          : "twelve-data",
-      isMarketOpen: Boolean(quoteData.is_market_open),
-      isExtendedHours: Boolean(quoteData.is_extended_hours),
-      previousClose: quoteData.previous_close ? parseNumber(quoteData.previous_close) : null,
+      timestamp: finalTimestamp,
+      source: finalSource,
+      isMarketOpen: finalIsMarketOpen,
+      isExtendedHours: finalIsExtendedHours,
+      previousClose: finalPreviousClose,
     },
   });
 }
