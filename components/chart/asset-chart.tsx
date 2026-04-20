@@ -1,6 +1,6 @@
 "use client";
 
-import { createChart, CrosshairMode } from "lightweight-charts";
+import { CrosshairMode, createChart } from "lightweight-charts";
 import { useEffect, useRef } from "react";
 import { asChartTime } from "@/lib/utils";
 import { IndicatorPoint } from "@/types/candle";
@@ -78,4 +78,3 @@ export function AssetChart({
 
   return <div ref={containerRef} className="w-full" />;
 }
-

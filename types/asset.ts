@@ -5,8 +5,9 @@ export type AssetCode =
   | "QQQ"
   | "GLD"
   | "SLV"
-  | "KODEX_USD_FUTURES"
-  | "TIGER_KRX_GOLD";
+  | "IWM"
+  | "SMH"
+  | "XLK";
 
 export type AssetSummary = {
   id: string;
@@ -17,4 +18,3 @@ export type AssetSummary = {
   marketType: string;
   isActive: boolean;
 };
-

@@ -10,15 +10,46 @@ import { Candle, IndicatorPoint } from "@/types/candle";
 import { SignalView } from "@/types/signal";
 import { PositionSnapshot, TradeFormInput } from "@/types/trade";
 
+export const DEFAULT_TIMEFRAME = "240m" as const;
+export const DEFAULT_TIMEFRAME_LABEL = "240\uBD84\uBD09";
+export const CANDLE_LIMIT = 200;
+const DEFAULT_TIMEFRAME_HOURS = 4;
+
+const LEGACY_GOLD_ASSET_ID = "asset-tiger-krx-gold";
+const CURRENT_GOLD_ASSET_ID = "asset-ace-krx-gold";
+const LEGACY_GOLD_CODE = "TIGER_KRX_GOLD";
+const CURRENT_GOLD_CODE = "ACE_KRX_GOLD";
+
+export type Timeframe = typeof DEFAULT_TIMEFRAME;
+
 export type MvpAsset = {
   id: string;
   code: string;
   name: string;
   symbol: string;
   currency: "KRW" | "USD";
-  marketType: "UPBIT" | "US_STOCK" | "KR_ETF";
+  marketType: "UPBIT" | "US_STOCK";
   isActive: boolean;
   supportsLiveData: boolean;
+  provider: "upbit" | "twelve-data";
+};
+
+export type QuoteSnapshot = {
+  assetCode: string;
+  price: number;
+  currency: "KRW" | "USD";
+  timestamp: string;
+  source: string;
+  isMarketOpen: boolean;
+  isStale?: boolean;
+  previousClose?: number | null;
+};
+
+export type MarketDataSnapshot = {
+  assetCode: string;
+  timeframe: Timeframe;
+  candles: Candle[];
+  quote: QuoteSnapshot | null;
 };
 
 export type LocalTradeRecord = {
@@ -67,14 +98,10 @@ export type FxRateSnapshot = {
 export type ExportPayload = {
   version: number;
   exportedAt: string;
+  defaultTimeframe: Timeframe;
   trades: LocalTradeRecord[];
   settings: AppSettings;
   customNotes: Record<string, string>;
-};
-
-type MarketDataProvider = {
-  key: string;
-  getCandles: (asset: MvpAsset) => Promise<Candle[]>;
 };
 
 type PositionRow = {
@@ -86,11 +113,24 @@ type PositionRow = {
   realizedPnlTotal: number;
   status: PositionSnapshot["status"];
   lastPrice: number;
+  quote: QuoteSnapshot | null;
+};
+
+type ProviderResponse = {
+  candles: Candle[];
+  quote: QuoteSnapshot | null;
+  timeframe?: string;
+};
+
+type MarketDataProvider = {
+  key: string;
+  getSnapshot: (asset: MvpAsset) => Promise<MarketDataSnapshot>;
 };
 
 export const STORAGE_KEYS = {
   trades: "signal-tracker:mvp:trades",
-  candles: "signal-tracker:mvp:candles",
+  candles: `signal-tracker:mvp:candles:${DEFAULT_TIMEFRAME}`,
+  quotes: "signal-tracker:mvp:quotes",
   settings: "signal-tracker:mvp:settings",
   customNotes: "signal-tracker:mvp:notes",
   importMeta: "signal-tracker:mvp:import-meta",
@@ -98,7 +138,11 @@ export const STORAGE_KEYS = {
   fxUsdKrw: "signal-tracker:mvp:fx-usd-krw",
 } as const;
 
-export const EXPORT_VERSION = 2;
+const LEGACY_STORAGE_KEYS = {
+  candles60m: "signal-tracker:mvp:candles",
+} as const;
+
+export const EXPORT_VERSION = 3;
 
 export const DEFAULT_SETTINGS: AppSettings = {
   defaultFeeRate: 0.05,
@@ -110,47 +154,82 @@ export const DEFAULT_SETTINGS: AppSettings = {
 };
 
 export const MVP_ASSETS: MvpAsset[] = [
-  { id: "asset-usdt-krw", code: "USDT_KRW", name: "업비트 테더", symbol: "KRW-USDT", currency: "KRW", marketType: "UPBIT", isActive: true, supportsLiveData: true },
-  { id: "asset-btc-krw", code: "BTC_KRW", name: "업비트 비트코인", symbol: "KRW-BTC", currency: "KRW", marketType: "UPBIT", isActive: true, supportsLiveData: true },
-  { id: "asset-voo", code: "VOO", name: "VOO", symbol: "VOO", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: false },
-  { id: "asset-qqq", code: "QQQ", name: "QQQ", symbol: "QQQ", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: false },
-  { id: "asset-gld", code: "GLD", name: "GLD", symbol: "GLD", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: false },
-  { id: "asset-slv", code: "SLV", name: "SLV", symbol: "SLV", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: false },
-  { id: "asset-kodex-usd-futures", code: "KODEX_USD_FUTURES", name: "KODEX 미국달러선물", symbol: "261240", currency: "KRW", marketType: "KR_ETF", isActive: true, supportsLiveData: false },
-  { id: "asset-tiger-krx-gold", code: "TIGER_KRX_GOLD", name: "TIGER KRX 금현물", symbol: "411060", currency: "KRW", marketType: "KR_ETF", isActive: true, supportsLiveData: false },
+  {
+    id: "asset-usdt-krw",
+    code: "USDT_KRW",
+    name: "\uC5C5\uBE44\uD2B8 \uD14C\uB354",
+    symbol: "KRW-USDT",
+    currency: "KRW",
+    marketType: "UPBIT",
+    isActive: true,
+    supportsLiveData: true,
+    provider: "upbit",
+  },
+  {
+    id: "asset-btc-krw",
+    code: "BTC_KRW",
+    name: "\uC5C5\uBE44\uD2B8 \uBE44\uD2B8\uCF54\uC778",
+    symbol: "KRW-BTC",
+    currency: "KRW",
+    marketType: "UPBIT",
+    isActive: true,
+    supportsLiveData: true,
+    provider: "upbit",
+  },
+  { id: "asset-voo", code: "VOO", name: "VOO", symbol: "VOO", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-qqq", code: "QQQ", name: "QQQ", symbol: "QQQ", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-gld", code: "GLD", name: "GLD", symbol: "GLD", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-slv", code: "SLV", name: "SLV", symbol: "SLV", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-iwm", code: "IWM", name: "IWM", symbol: "IWM", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-smh", code: "SMH", name: "SMH", symbol: "SMH", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-xlk", code: "XLK", name: "XLK", symbol: "XLK", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
 ];
 
 function ensureBrowser() {
   return typeof window !== "undefined";
 }
 
+let storageMigrated = false;
+
 function seededValue(seed: number) {
   const x = Math.sin(seed) * 10000;
   return x - Math.floor(x);
 }
 
+function normalizeAssetId(assetId: string) {
+  return assetId === LEGACY_GOLD_ASSET_ID ? CURRENT_GOLD_ASSET_ID : assetId;
+}
+
+function normalizeAssetCode(code: string) {
+  return code === LEGACY_GOLD_CODE ? CURRENT_GOLD_CODE : code;
+}
+
 function getSeedFromCode(code: string) {
-  return code.split("").reduce((sum, char, index) => sum + char.charCodeAt(0) * (index + 1), 0);
+  return normalizeAssetCode(code)
+    .split("")
+    .reduce((sum, char, index) => sum + char.charCodeAt(0) * (index + 1), 0);
 }
 
 function getBasePrice(asset: MvpAsset) {
   switch (asset.code) {
     case "BTC_KRW":
-      return 98_000_000;
+      return 111_000_000;
     case "USDT_KRW":
-      return 1_380;
+      return 1_480;
     case "VOO":
-      return 520;
+      return 650;
     case "QQQ":
-      return 460;
+      return 645;
     case "GLD":
-      return 240;
+      return 445;
     case "SLV":
-      return 29;
-    case "KODEX_USD_FUTURES":
-      return 12_800;
-    case "TIGER_KRX_GOLD":
-      return 18_900;
+      return 74;
+    case "IWM":
+      return 275;
+    case "SMH":
+      return 460;
+    case "XLK":
+      return 154;
     default:
       return 100;
   }
@@ -160,20 +239,20 @@ function getBaseVolume(asset: MvpAsset) {
   return asset.currency === "KRW" ? 1_000 : 10_000;
 }
 
-function createMockCandles(asset: MvpAsset, length = 220): Candle[] {
+function createMockCandles(asset: MvpAsset, length = CANDLE_LIMIT): Candle[] {
   const seed = getSeedFromCode(asset.code);
-  const start = subHours(new Date(), length - 1);
+  const start = subHours(new Date(), (length - 1) * DEFAULT_TIMEFRAME_HOURS);
   const candles: Candle[] = [];
   let lastClose = getBasePrice(asset);
 
   for (let index = 0; index < length; index += 1) {
-    const time = addHours(start, index);
-    const wave = Math.sin((index + seed) / 8) * lastClose * 0.01;
-    const drift = (seededValue(seed + index * 3) - 0.47) * lastClose * 0.012;
-    const close = Math.max(1, lastClose + wave * 0.2 + drift);
+    const time = addHours(start, index * DEFAULT_TIMEFRAME_HOURS);
+    const wave = Math.sin((index + seed) / 6) * lastClose * 0.018;
+    const drift = (seededValue(seed + index * 3) - 0.47) * lastClose * 0.016;
+    const close = Math.max(1, lastClose + wave * 0.25 + drift);
     const open = lastClose;
-    const high = Math.max(open, close) * (1 + seededValue(seed + index * 11) * 0.01);
-    const low = Math.min(open, close) * (1 - seededValue(seed + index * 17) * 0.01);
+    const high = Math.max(open, close) * (1 + seededValue(seed + index * 11) * 0.012);
+    const low = Math.min(open, close) * (1 - seededValue(seed + index * 17) * 0.012);
     const volume = getBaseVolume(asset) * (0.75 + seededValue(seed + index * 5) * 0.8);
 
     candles.push({
@@ -191,11 +270,73 @@ function createMockCandles(asset: MvpAsset, length = 220): Candle[] {
   return candles;
 }
 
+function createMockQuote(asset: MvpAsset, candles: Candle[]): QuoteSnapshot {
+  const last = candles.at(-1);
+  return {
+    assetCode: asset.code,
+    price: last?.close ?? getBasePrice(asset),
+    currency: asset.currency,
+    timestamp: last?.time ?? new Date().toISOString(),
+    source: "mock",
+    isMarketOpen: false,
+    isStale: true,
+    previousClose: candles.at(-2)?.close ?? null,
+  };
+}
+
+function runStorageMigrations() {
+  if (!ensureBrowser() || storageMigrated) {
+    return;
+  }
+
+  const tradesRaw = window.localStorage.getItem(STORAGE_KEYS.trades);
+  if (tradesRaw) {
+    try {
+      const parsed = JSON.parse(tradesRaw) as LocalTradeRecord[];
+      const migrated = parsed.map((trade) => ({ ...trade, assetId: normalizeAssetId(trade.assetId) }));
+      window.localStorage.setItem(STORAGE_KEYS.trades, JSON.stringify(migrated));
+    } catch {
+      // noop
+    }
+  }
+
+  const notesRaw = window.localStorage.getItem(STORAGE_KEYS.customNotes);
+  if (notesRaw) {
+    try {
+      const parsed = JSON.parse(notesRaw) as Record<string, string>;
+      if (parsed[LEGACY_GOLD_CODE] && !parsed[CURRENT_GOLD_CODE]) {
+        parsed[CURRENT_GOLD_CODE] = parsed[LEGACY_GOLD_CODE];
+      }
+      delete parsed[LEGACY_GOLD_CODE];
+      window.localStorage.setItem(STORAGE_KEYS.customNotes, JSON.stringify(parsed));
+    } catch {
+      // noop
+    }
+  }
+
+  const legacyCandles = window.localStorage.getItem(LEGACY_STORAGE_KEYS.candles60m);
+  if (legacyCandles && !window.localStorage.getItem(STORAGE_KEYS.candles)) {
+    try {
+      const parsed = JSON.parse(legacyCandles) as Record<string, Candle[]>;
+      const migrated: Record<string, Candle[]> = {};
+      for (const [key, value] of Object.entries(parsed)) {
+        migrated[normalizeAssetCode(key)] = value;
+      }
+      window.localStorage.setItem(STORAGE_KEYS.candles, JSON.stringify(migrated));
+    } catch {
+      // noop
+    }
+  }
+
+  storageMigrated = true;
+}
+
 function readStorage<T>(key: string, fallback: T): T {
   if (!ensureBrowser()) {
     return fallback;
   }
 
+  runStorageMigrations();
   const raw = window.localStorage.getItem(key);
   if (!raw) {
     return fallback;
@@ -213,14 +354,53 @@ function writeStorage<T>(key: string, value: T) {
     return;
   }
 
+  runStorageMigrations();
   window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+function normalizeQuote(asset: MvpAsset, quote: QuoteSnapshot | null, candles: Candle[]) {
+  if (quote) {
+    return {
+      ...quote,
+      assetCode: normalizeAssetCode(quote.assetCode),
+      currency: asset.currency,
+    };
+  }
+
+  return createMockQuote(asset, candles);
+}
+
+async function fetchProviderResponse(url: string) {
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch ${url}`);
+  }
+
+  return (await response.json()) as ProviderResponse;
+}
+
+function buildSnapshot(asset: MvpAsset, data: ProviderResponse): MarketDataSnapshot {
+  const candles = data.candles?.length ? data.candles : createMockCandles(asset);
+
+  return {
+    assetCode: asset.code,
+    timeframe: DEFAULT_TIMEFRAME,
+    candles,
+    quote: normalizeQuote(asset, data.quote, candles),
+  };
 }
 
 function getMockProvider(): MarketDataProvider {
   return {
     key: "mock",
-    async getCandles(asset) {
-      return createMockCandles(asset);
+    async getSnapshot(asset) {
+      const candles = createMockCandles(asset);
+      return {
+        assetCode: asset.code,
+        timeframe: DEFAULT_TIMEFRAME,
+        candles,
+        quote: createMockQuote(asset, candles),
+      };
     },
   };
 }
@@ -228,43 +408,71 @@ function getMockProvider(): MarketDataProvider {
 function getUpbitProvider(): MarketDataProvider {
   return {
     key: "upbit-live",
-    async getCandles(asset) {
-      if (asset.marketType !== "UPBIT") {
-        return createMockCandles(asset);
-      }
+    async getSnapshot(asset) {
+      const data = await fetchProviderResponse(`/api/market-data/upbit/${asset.symbol}?count=${CANDLE_LIMIT}`);
+      return buildSnapshot(asset, data);
+    },
+  };
+}
 
-      const response = await fetch(`/api/market-data/upbit/${asset.symbol}?count=200`, { cache: "no-store" });
-      if (!response.ok) {
-        throw new Error(`Failed to fetch live candles for ${asset.code}`);
-      }
-
-      const data = (await response.json()) as { candles: Candle[] };
-      return data.candles;
+function getUsProvider(): MarketDataProvider {
+  return {
+    key: "us-live",
+    async getSnapshot(asset) {
+      const data = await fetchProviderResponse(`/api/market-data/us/${asset.symbol}?count=${CANDLE_LIMIT}`);
+      return buildSnapshot(asset, data);
     },
   };
 }
 
 export function getMarketDataProvider(asset: MvpAsset): MarketDataProvider {
-  if (asset.marketType === "UPBIT" && asset.supportsLiveData) {
-    return getUpbitProvider();
+  switch (asset.provider) {
+    case "upbit":
+      return getUpbitProvider();
+    case "twelve-data":
+      return getUsProvider();
+    default:
+      return getMockProvider();
   }
+}
 
-  return getMockProvider();
+function readCandlesMap() {
+  return readStorage<Record<string, Candle[]>>(STORAGE_KEYS.candles, {});
+}
+
+function writeCandlesMap(value: Record<string, Candle[]>) {
+  writeStorage(STORAGE_KEYS.candles, value);
+}
+
+function readQuotesMap() {
+  return readStorage<Record<string, QuoteSnapshot>>(STORAGE_KEYS.quotes, {});
+}
+
+function writeQuotesMap(value: Record<string, QuoteSnapshot>) {
+  writeStorage(STORAGE_KEYS.quotes, value);
 }
 
 export const marketDataRepository = {
-  async getCandles(assetCode: string) {
+  async getSnapshot(assetCode: string) {
     const asset = getMvpAssetByCode(assetCode);
     if (!asset) {
-      return [] as Candle[];
+      return null;
     }
 
     const provider = getMarketDataProvider(asset);
-    const candles = await provider.getCandles(asset);
-    const candleMap = readStorage<Record<string, Candle[]>>(STORAGE_KEYS.candles, {});
-    candleMap[assetCode] = candles;
-    writeStorage(STORAGE_KEYS.candles, candleMap);
-    return candles;
+    const snapshot = await provider.getSnapshot(asset);
+
+    const candleMap = readCandlesMap();
+    candleMap[asset.code] = snapshot.candles;
+    writeCandlesMap(candleMap);
+
+    if (snapshot.quote) {
+      const quoteMap = readQuotesMap();
+      quoteMap[asset.code] = snapshot.quote;
+      writeQuotesMap(quoteMap);
+    }
+
+    return snapshot;
   },
 };
 
@@ -306,11 +514,13 @@ export function listMvpAssets() {
 }
 
 export function getMvpAssetByCode(code: string) {
-  return MVP_ASSETS.find((asset) => asset.code === code) ?? null;
+  const normalized = normalizeAssetCode(code);
+  return MVP_ASSETS.find((asset) => asset.code === normalized) ?? null;
 }
 
 export function getAssetById(assetId: string) {
-  return MVP_ASSETS.find((asset) => asset.id === assetId) ?? null;
+  const normalized = normalizeAssetId(assetId);
+  return MVP_ASSETS.find((asset) => asset.id === normalized) ?? null;
 }
 
 export function getCachedCandles(code: string): Candle[] {
@@ -319,26 +529,62 @@ export function getCachedCandles(code: string): Candle[] {
     return [];
   }
 
-  const candleMap = readStorage<Record<string, Candle[]>>(STORAGE_KEYS.candles, {});
-  if (!candleMap[code]) {
-    candleMap[code] = createMockCandles(asset);
-    writeStorage(STORAGE_KEYS.candles, candleMap);
+  const candleMap = readCandlesMap();
+  if (!candleMap[asset.code]) {
+    candleMap[asset.code] = createMockCandles(asset);
+    writeCandlesMap(candleMap);
   }
 
-  return candleMap[code];
+  return candleMap[asset.code];
 }
 
-export async function loadCandlesForAsset(code: string) {
+export function getCachedQuote(code: string) {
   const asset = getMvpAssetByCode(code);
   if (!asset) {
-    return [];
+    return null;
+  }
+
+  const quoteMap = readQuotesMap();
+  if (quoteMap[asset.code]) {
+    return quoteMap[asset.code];
+  }
+
+  const candles = getCachedCandles(asset.code);
+  const fallback = createMockQuote(asset, candles);
+  quoteMap[asset.code] = fallback;
+  writeQuotesMap(quoteMap);
+  return fallback;
+}
+
+export async function loadMarketDataForAsset(code: string) {
+  const asset = getMvpAssetByCode(code);
+  if (!asset) {
+    return null;
   }
 
   try {
-    return await marketDataRepository.getCandles(code);
+    return await marketDataRepository.getSnapshot(asset.code);
   } catch {
-    return getCachedCandles(code);
+    const candles = getCachedCandles(asset.code);
+    const quote = getCachedQuote(asset.code);
+
+    return {
+      assetCode: asset.code,
+      timeframe: DEFAULT_TIMEFRAME,
+      candles,
+      quote: quote ? { ...quote, isStale: true } : createMockQuote(asset, candles),
+    } satisfies MarketDataSnapshot;
   }
+}
+
+export async function loadCandlesForAsset(code: string) {
+  const snapshot = await loadMarketDataForAsset(code);
+  return snapshot?.candles ?? [];
+}
+
+export async function loadQuoteForAsset(code: string) {
+  const snapshot = await loadMarketDataForAsset(code);
+  return snapshot?.quote ?? null;
 }
 
 export async function getUsdKrwRate(forceRefresh = false) {
@@ -377,18 +623,13 @@ export async function getUsdKrwRate(forceRefresh = false) {
 
 export function getSignalLabel(signal: SignalView | null) {
   if (!signal) {
-    return "관망";
+    return "\uAD00\uB9DD";
   }
 
-  return signal.signalType === "BUY" ? "매수 후보" : "매도 후보";
+  return signal.signalType === "BUY" ? "\uB9E4\uC218 \uD6C4\uBCF4" : "\uB9E4\uB3C4 \uD6C4\uBCF4";
 }
 
-function createSignalView(
-  asset: MvpAsset,
-  point: IndicatorPoint,
-  generated: ReturnType<typeof generateSignal>,
-  index: number
-): SignalView {
+function createSignalView(asset: MvpAsset, point: IndicatorPoint, generated: ReturnType<typeof generateSignal>, index: number): SignalView {
   return {
     id: `${asset.code}-${point.time}-${generated?.signalType ?? "NONE"}-${index}`,
     assetCode: asset.code,
@@ -396,15 +637,15 @@ function createSignalView(
     timestamp: point.time,
     signalType: generated?.signalType ?? "BUY",
     signalStage: generated?.signalStage ?? 1,
-    strategyName: "ema-rsi-macd-volume-v1",
+    strategyName: "ema-rsi-macd-volume-240m-v1",
     signalPrice: generated?.signalPrice ?? point.close,
     stopPrice: generated?.stopPrice ?? null,
     targetPrice: generated?.targetPrice ?? null,
     reasonSummary:
       generated?.reasonSummary ??
       (generated?.signalType === "BUY"
-        ? "매수 후보: EMA 정배열, RSI 중립 강세, 거래량 확인"
-        : "매도 후보: EMA 이탈 또는 MACD 둔화"),
+        ? "\u0032\u0034\u0030\uBD84\uBD09 \uCD94\uC138 \uD655\uC778 \uD6C4 \uBD84\uD560 \uC9C4\uC785 \uD6C4\uBCF4"
+        : "\u0032\u0034\u0030\uBD84\uBD09 \uCD94\uC138 \uC57D\uD654 \uB610\uB294 \uC774\uD0C8 \uC2E0\uD638"),
     status: "NEW",
   };
 }
@@ -415,7 +656,7 @@ export function getSignalsFromCandles(assetCode: string, candles: Candle[]) {
     return [] as SignalView[];
   }
 
-  const indicators = enrichCandles(candles.slice(-200));
+  const indicators = enrichCandles(candles.slice(-CANDLE_LIMIT));
   const signals: SignalView[] = [];
 
   for (let index = 60; index < indicators.length; index += 1) {
@@ -436,13 +677,25 @@ export function getSignalsFromCandles(assetCode: string, candles: Candle[]) {
   return signals.slice(-12);
 }
 
+export function isActionableBuySignal(signal: SignalView, quote: QuoteSnapshot | null, thresholdPercent = 3) {
+  if (signal.signalType !== "BUY" || !quote) {
+    return false;
+  }
+
+  const divergence = Math.abs((quote.price - signal.signalPrice) / signal.signalPrice) * 100;
+  return divergence <= thresholdPercent;
+}
+
 export function getRecentSignals() {
   return MVP_ASSETS.map((asset) => getSignalsFromCandles(asset.code, getCachedCandles(asset.code)).at(-1))
     .filter(Boolean) as SignalView[];
 }
 
 export function readTrades() {
-  return storageRepository.readTrades();
+  return storageRepository.readTrades().map((trade) => ({
+    ...trade,
+    assetId: normalizeAssetId(trade.assetId),
+  }));
 }
 
 export function getSettings() {
@@ -454,37 +707,42 @@ export function saveSettings(settings: AppSettings) {
 }
 
 export function getCustomNotes() {
-  return storageRepository.readNotes();
+  const notes = storageRepository.readNotes();
+  if (notes[LEGACY_GOLD_CODE] && !notes[CURRENT_GOLD_CODE]) {
+    notes[CURRENT_GOLD_CODE] = notes[LEGACY_GOLD_CODE];
+  }
+  delete notes[LEGACY_GOLD_CODE];
+  return notes;
 }
 
 export function saveCustomNote(key: string, note: string) {
   const current = storageRepository.readNotes();
-  current[key] = note;
+  current[normalizeAssetCode(key)] = note;
   storageRepository.writeNotes(current);
 }
 
 export function validateTradeInput(input: TradeFormInput) {
   const asset = getAssetById(input.assetId);
   if (!asset) {
-    return { ok: false as const, message: "자산을 찾을 수 없습니다." };
+    return { ok: false as const, message: "Asset not found." };
   }
 
   if (input.quantity <= 0 || input.price <= 0) {
-    return { ok: false as const, message: "수량과 가격은 0보다 커야 합니다." };
+    return { ok: false as const, message: "Quantity and price must be greater than zero." };
   }
 
   if (input.fee !== undefined && input.fee < 0) {
-    return { ok: false as const, message: "수수료는 음수가 될 수 없습니다." };
+    return { ok: false as const, message: "Fee cannot be negative." };
   }
 
   if (input.side === "SELL") {
     const position = getPositionByAssetId(input.assetId);
     if (!position || position.quantity <= 0) {
-      return { ok: false as const, message: "보유 수량이 없어 매도할 수 없습니다." };
+      return { ok: false as const, message: "No position available to sell." };
     }
 
     if (input.quantity > position.quantity) {
-      return { ok: false as const, message: "보유 수량보다 많이 매도할 수 없습니다." };
+      return { ok: false as const, message: "Cannot sell more than current position size." };
     }
   }
 
@@ -507,14 +765,14 @@ export async function saveTrade(input: TradeFormInput) {
 
   const asset = getAssetById(input.assetId);
   if (!asset) {
-    throw new Error("자산을 찾을 수 없습니다.");
+    throw new Error("Asset not found.");
   }
 
   const fx = await getUsdKrwRate();
   const exchangeRate = asset.currency === "USD" ? fx.rate : 1;
   const trades = readTrades();
   const assetTrades = trades
-    .filter((trade) => trade.assetId === input.assetId)
+    .filter((trade) => trade.assetId === normalizeAssetId(input.assetId))
     .sort((a, b) => new Date(a.executedAt).getTime() - new Date(b.executedAt).getTime());
 
   const position = reduceTradesToPosition(assetTrades);
@@ -537,8 +795,8 @@ export async function saveTrade(input: TradeFormInput) {
   const cumulativePnl = trades.reduce((sum, trade) => sum + trade.realizedPnl, 0) + realizedPnl;
 
   const record: LocalTradeRecord = {
-    id: `${input.assetId}-${Date.now()}`,
-    assetId: input.assetId,
+    id: `${normalizeAssetId(input.assetId)}-${Date.now()}`,
+    assetId: normalizeAssetId(input.assetId),
     executedAt: input.executedAt,
     side: input.side,
     stage: input.stage,
@@ -572,8 +830,8 @@ export function getPositionByAssetId(assetId: string): PositionRow | null {
   const trades = readTrades()
     .filter((trade) => trade.assetId === asset.id)
     .sort((a, b) => new Date(a.executedAt).getTime() - new Date(b.executedAt).getTime());
-  const candles = getCachedCandles(asset.code);
-  const lastPrice = candles.at(-1)?.close ?? 0;
+  const quote = getCachedQuote(asset.code);
+  const lastPrice = quote?.price ?? getCachedCandles(asset.code).at(-1)?.close ?? 0;
   const position = reduceTradesToPosition(trades, lastPrice);
 
   return {
@@ -585,6 +843,7 @@ export function getPositionByAssetId(assetId: string): PositionRow | null {
     realizedPnlTotal: position.realizedPnlTotal,
     status: position.status,
     lastPrice,
+    quote,
   };
 }
 
@@ -614,12 +873,14 @@ export async function getAssetDetail(code: string) {
     return null;
   }
 
-  const candles = await loadCandlesForAsset(code);
+  const snapshot = await loadMarketDataForAsset(code);
+  const candles = snapshot?.candles ?? [];
+  const quote = snapshot?.quote ?? null;
   const indicators = enrichCandles(candles);
   const signals = getSignalsFromCandles(code, candles);
   const position = getPositions().find((item) => item.asset.code === code) ?? null;
 
-  return { asset, candles, indicators, signals, position };
+  return { asset, candles, indicators, signals, position, quote };
 }
 
 export function calculateStagePlan(price: number, settings: AppSettings, ema20?: number | null, support?: number | null) {
@@ -649,6 +910,7 @@ export function exportLocalData(): ExportPayload {
   return {
     version: EXPORT_VERSION,
     exportedAt: new Date().toISOString(),
+    defaultTimeframe: DEFAULT_TIMEFRAME,
     trades: readTrades(),
     settings: getSettings(),
     customNotes: getCustomNotes(),
@@ -657,29 +919,28 @@ export function exportLocalData(): ExportPayload {
 
 export function importLocalData(payload: ExportPayload) {
   if (payload.version > EXPORT_VERSION) {
-    throw new Error("지원하지 않는 백업 파일 버전입니다.");
+    throw new Error("Unsupported backup version.");
   }
 
   if (!Array.isArray(payload.trades)) {
-    throw new Error("거래 데이터 형식이 올바르지 않습니다.");
+    throw new Error("Invalid trades payload.");
   }
 
   const migratedTrades = payload.trades.map((trade) => {
-    if ("exchangeRate" in trade) {
-      return trade as LocalTradeRecord;
-    }
-
-    const legacy = trade as LocalTradeRecord;
-    const asset = getAssetById(legacy.assetId);
-    const exchangeRate = asset?.currency === "USD" ? 1_350 : 1;
+    const asset = getAssetById(normalizeAssetId(trade.assetId));
+    const exchangeRate = "exchangeRate" in trade ? trade.exchangeRate : asset?.currency === "USD" ? 1_350 : 1;
+    const normalizedTrade = {
+      ...trade,
+      assetId: normalizeAssetId(trade.assetId),
+    } as LocalTradeRecord;
 
     return {
-      ...legacy,
+      ...normalizedTrade,
       exchangeRate,
-      krwAmount: convertToKrw(legacy.amount, asset?.currency ?? "KRW", exchangeRate),
-      krwFee: convertToKrw(legacy.fee, asset?.currency ?? "KRW", exchangeRate),
-      krwRealizedPnl: convertToKrw(legacy.realizedPnl, asset?.currency ?? "KRW", exchangeRate),
-      krwCumulativePnl: convertToKrw(legacy.cumulativePnl, asset?.currency ?? "KRW", exchangeRate),
+      krwAmount: convertToKrw(normalizedTrade.amount, asset?.currency ?? "KRW", exchangeRate),
+      krwFee: convertToKrw(normalizedTrade.fee, asset?.currency ?? "KRW", exchangeRate),
+      krwRealizedPnl: convertToKrw(normalizedTrade.realizedPnl, asset?.currency ?? "KRW", exchangeRate),
+      krwCumulativePnl: convertToKrw(normalizedTrade.cumulativePnl, asset?.currency ?? "KRW", exchangeRate),
     };
   });
 

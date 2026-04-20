@@ -17,10 +17,10 @@ export function PositionsTable({ positions }: { positions: PositionRow[] }) {
     <Card>
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">보유 포지션</h2>
-        <span className="text-xs text-slate-400">자산 원통화 기준</span>
+        <span className="text-xs text-slate-400">현재가는 원래 통화 기준</span>
       </div>
       {positions.length === 0 ? (
-        <p className="text-sm text-slate-400">아직 기록된 포지션이 없습니다.</p>
+        <p className="text-sm text-slate-400">아직 보유 중인 포지션이 없습니다.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
@@ -31,7 +31,7 @@ export function PositionsTable({ positions }: { positions: PositionRow[] }) {
                 <th className="pb-3">평균단가</th>
                 <th className="pb-3">현재가</th>
                 <th className="pb-3">평가손익</th>
-                <th className="pb-3">누적실현손익</th>
+                <th className="pb-3">실현손익</th>
                 <th className="pb-3">상태</th>
               </tr>
             </thead>

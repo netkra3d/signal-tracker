@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { Card } from "@/components/common/card";
 import { TradeForm } from "@/components/trades/trade-form";
-import { getAssetById, getUsdKrwRate, listMvpAssets, readTrades, saveTrade, type FxRateSnapshot } from "@/lib/mvp-store";
-import { formatCurrency, formatKrwEquivalent, formatPercent } from "@/lib/utils";
+import { DEFAULT_TIMEFRAME_LABEL, getAssetById, getUsdKrwRate, listMvpAssets, readTrades, saveTrade, type FxRateSnapshot } from "@/lib/mvp-store";
+import { formatCurrency, formatDateTime, formatKrwEquivalent, formatPercent } from "@/lib/utils";
 import { TradeFormInput } from "@/types/trade";
 
 export function TradesClient() {
@@ -33,7 +33,8 @@ export function TradesClient() {
     <div className="space-y-6">
       <div>
         <p className="text-sm uppercase tracking-[0.3em] text-cyan-300">Trade Journal</p>
-        <h1 className="mt-2 text-4xl font-semibold">원통화 체결, 원화 환산 매매일지</h1>
+        <h1 className="mt-2 text-4xl font-semibold">거래 기록과 원화 환산 일지</h1>
+        <p className="mt-2 text-sm text-slate-400">{DEFAULT_TIMEFRAME_LABEL} 기준 앱이지만 체결 가격은 실제 주문한 가격으로 직접 기록합니다.</p>
         {fx ? <p className="mt-2 text-sm text-slate-400">오늘 환율 기준: $1 = {formatCurrency(fx.rate, "KRW")}</p> : null}
       </div>
 
@@ -44,7 +45,7 @@ export function TradesClient() {
       <Card>
         <h2 className="mb-4 text-lg font-semibold">최근 거래</h2>
         {trades.length === 0 ? (
-          <p className="text-sm text-slate-400">아직 저장된 거래가 없습니다.</p>
+          <p className="text-sm text-slate-400">아직 저장한 거래가 없습니다.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -70,7 +71,7 @@ export function TradesClient() {
 
                   return (
                     <tr key={trade.id} className="border-t border-white/5">
-                      <td className="py-3">{new Date(trade.executedAt).toLocaleString("ko-KR")}</td>
+                      <td className="py-3">{formatDateTime(trade.executedAt)}</td>
                       <td>{asset?.name ?? trade.assetId}</td>
                       <td>{trade.side}</td>
                       <td>{trade.stage}</td>

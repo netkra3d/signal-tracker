@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getPositionByAssetId, getSettings } from "@/lib/mvp-store";
-import { formatCurrency } from "@/lib/utils";
+import { DEFAULT_TIMEFRAME_LABEL, getPositionByAssetId, getSettings } from "@/lib/mvp-store";
+import { formatCurrency, formatNumber } from "@/lib/utils";
 import { TradeFormInput } from "@/types/trade";
 
 type AssetOption = {
@@ -41,8 +41,8 @@ export function TradeForm({
   const modeLabel = form.side === "BUY" ? "매수 입력" : "매도 입력";
   const helperText =
     form.side === "BUY"
-      ? "매수는 평균 매입가와 보유 수량을 늘립니다."
-      : "매도는 보유 수량을 초과할 수 없고, 실현손익이 자동 계산됩니다.";
+      ? `${DEFAULT_TIMEFRAME_LABEL} 신호를 참고하더라도, 체결 가격은 실제 주문한 가격으로 기록하세요.`
+      : "매도는 보유 수량을 넘길 수 없고, 실현손익은 자동 계산됩니다.";
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -78,7 +78,7 @@ export function TradeForm({
       {selectedPosition ? (
         <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
           <p>
-            현재 포지션: {selectedAsset?.name} / 보유 {selectedPosition.quantity} / 평균단가{" "}
+            현재 포지션 {selectedAsset?.name} / 보유 {formatNumber(selectedPosition.quantity, 8)} / 평균단가{" "}
             {formatCurrency(selectedPosition.avgEntryPrice, selectedPosition.asset.currency)}
           </p>
         </div>
@@ -179,9 +179,7 @@ export function TradeForm({
           />
         </label>
 
-        <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-4 text-sm text-cyan-100">
-          총액 자동 계산: {amount.toLocaleString("ko-KR")}
-        </div>
+        <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-4 text-sm text-cyan-100">총액 자동 계산: {formatNumber(amount, 4)}</div>
         <button
           type="submit"
           disabled={submitting}

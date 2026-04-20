@@ -14,7 +14,7 @@ export async function GET() {
   });
 
   if (!upstream.ok) {
-    return NextResponse.json({ message: "환율 데이터를 가져오지 못했습니다." }, { status: upstream.status });
+    return NextResponse.json({ message: "Failed to load USD/KRW rate." }, { status: upstream.status });
   }
 
   const data = (await upstream.json()) as FrankfurterResponse;

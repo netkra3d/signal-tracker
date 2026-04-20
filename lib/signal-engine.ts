@@ -30,7 +30,15 @@ export function generateSignal(candles: IndicatorPoint[]): GeneratedSignal | nul
   const prevMacdHistogram = previous.macdHistogram ?? null;
   const prevRsi14 = previous.rsi14 ?? null;
 
-  if (ema20 === null || ema60 === null || rsi14 === null || macdHistogram === null || volumeSma20 === null || prevMacdHistogram === null || prevRsi14 === null) {
+  if (
+    ema20 === null ||
+    ema60 === null ||
+    rsi14 === null ||
+    macdHistogram === null ||
+    volumeSma20 === null ||
+    prevMacdHistogram === null ||
+    prevRsi14 === null
+  ) {
     return null;
   }
 
@@ -52,7 +60,7 @@ export function generateSignal(candles: IndicatorPoint[]): GeneratedSignal | nul
       signalPrice: round(current.close, 4),
       stopPrice: round(Math.min(current.close * 0.96, support), 4),
       targetPrice: round(current.close * 1.06, 4),
-      reasonSummary: "20EMA 상방, RSI 중립 강세, MACD 개선, 거래량 확인",
+      reasonSummary: "20EMA 상단, RSI 중립 강세, MACD 개선, 거래량 확인",
       metadata: {
         entry1: round(current.close, 4),
         entry2: round(ema20, 4),
@@ -61,10 +69,7 @@ export function generateSignal(candles: IndicatorPoint[]): GeneratedSignal | nul
     };
   }
 
-  const isSell =
-    current.close < ema20 ||
-    (prevRsi14 >= 70 && rsi14 < prevRsi14) ||
-    macdHistogram < prevMacdHistogram;
+  const isSell = current.close < ema20 || (prevRsi14 >= 70 && rsi14 < prevRsi14) || macdHistogram < prevMacdHistogram;
 
   if (isSell) {
     return {
@@ -73,7 +78,7 @@ export function generateSignal(candles: IndicatorPoint[]): GeneratedSignal | nul
       signalPrice: round(current.close, 4),
       stopPrice: round(current.close * 1.02, 4),
       targetPrice: round(current.close * 0.97, 4),
-      reasonSummary: "20EMA 이탈 또는 MACD 둔화로 매도 후보",
+      reasonSummary: "20EMA 이탈 또는 MACD 약화로 매도 후보",
       metadata: {
         exit1: round(current.close * 1.02, 4),
         exit2: round(current.close * 1.04, 4),

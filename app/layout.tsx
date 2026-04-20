@@ -5,7 +5,7 @@ import { AppGuard } from "@/components/mvp/app-guard";
 
 export const metadata: Metadata = {
   title: "Signal Tracker",
-  description: "60분봉 매매 신호와 거래 기록을 관리하는 개인용 투자 일지 앱",
+  description: "240분봉 매매 신호와 거래 기록을 관리하는 개인용 투자 일지 앱",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

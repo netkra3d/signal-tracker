@@ -4,6 +4,8 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/common/card";
 import {
   DEFAULT_SETTINGS,
+  DEFAULT_TIMEFRAME,
+  DEFAULT_TIMEFRAME_LABEL,
   EXPORT_VERSION,
   exportLocalData,
   getSettings,
@@ -28,13 +30,13 @@ export function SettingsClient() {
   const importMeta = useMemo(() => storageRepository.readImportMeta(), [message]);
 
   if (!ready) {
-    return <div className="text-sm text-slate-300">설정을 불러오는 중...</div>;
+    return <div className="text-sm text-slate-300">설정을 불러오는 중입니다.</div>;
   }
 
   function updateSettings(next: AppSettings) {
     setSettings(next);
     saveSettings(next);
-    setMessage("설정을 저장했습니다.");
+    setMessage("설정이 저장되었습니다.");
   }
 
   function handleNumberChange<K extends keyof AppSettings>(key: K, value: number) {
@@ -84,17 +86,25 @@ export function SettingsClient() {
     <div className="space-y-6">
       <div>
         <p className="text-sm uppercase tracking-[0.3em] text-cyan-300">Settings</p>
-        <h1 className="mt-2 text-4xl font-semibold">실사용 설정과 백업 관리</h1>
+        <h1 className="mt-2 text-4xl font-semibold">기본 설정과 백업 관리</h1>
       </div>
 
       {message ? <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100">{message}</div> : null}
+
+      <Card>
+        <div className="flex flex-col gap-1 text-sm">
+          <p className="font-medium text-white">기준 차트</p>
+          <p className="text-slate-300">{DEFAULT_TIMEFRAME_LABEL} 고정</p>
+          <p className="text-slate-500">이 MVP는 초보자용 단일 기준 앱이라 시간프레임 변경 옵션을 두지 않습니다. 백업 파일에도 `{DEFAULT_TIMEFRAME}`가 함께 저장됩니다.</p>
+        </div>
+      </Card>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
           <h2 className="mb-4 text-lg font-semibold">기본 전략 설정</h2>
           <div className="grid gap-4 md:grid-cols-2">
             <label className="space-y-2 text-sm">
-              <span>기본 수수료(고정값)</span>
+              <span>기본 수수료 고정값</span>
               <input
                 type="number"
                 step="0.01"
@@ -178,7 +188,7 @@ export function SettingsClient() {
         </Card>
 
         <Card>
-          <h2 className="mb-4 text-lg font-semibold">앱 보호</h2>
+          <h2 className="mb-4 text-lg font-semibold">브라우저 보호</h2>
           <div className="space-y-4 text-sm">
             <label className="flex items-center gap-3">
               <input
@@ -189,7 +199,7 @@ export function SettingsClient() {
               <span>브라우저 잠금 사용</span>
             </label>
             <p className="text-slate-400">
-              현재 잠금은 브라우저 단 간단 보호용입니다. 민감 정보는 저장하지 않으며, 본인 기기에서만 가볍게 접근을 제한하는 수준입니다.
+              현재 잠금은 브라우저 단의 간단한 보호 기능입니다. 민감 정보는 저장하지 않고, 본인 기기에서만 접근을 제한하는 용도입니다.
             </p>
           </div>
         </Card>

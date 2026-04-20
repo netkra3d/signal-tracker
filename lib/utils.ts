@@ -23,12 +23,18 @@ export function round(value: number, digits = 4) {
   return Math.round(value * factor) / factor;
 }
 
-export function formatCurrency(value: number, currency = "KRW") {
-  return new Intl.NumberFormat("ko-KR", {
+export function formatCurrency(value: number, currency: "KRW" | "USD" | string = "KRW") {
+  const locale = currency === "USD" ? "en-US" : "ko-KR";
+
+  return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
     maximumFractionDigits: currency === "KRW" ? 0 : 2,
   }).format(value);
+}
+
+export function formatNumber(value: number, maximumFractionDigits = 4) {
+  return new Intl.NumberFormat("ko-KR", { maximumFractionDigits }).format(value);
 }
 
 export function formatKrwEquivalent(value: number) {
@@ -37,6 +43,10 @@ export function formatKrwEquivalent(value: number) {
 
 export function formatPercent(value: number) {
   return `${round(value, 2).toFixed(2)}%`;
+}
+
+export function formatDateTime(value: string | Date) {
+  return new Date(value).toLocaleString("ko-KR");
 }
 
 export function asChartTime(value: string | Date) {

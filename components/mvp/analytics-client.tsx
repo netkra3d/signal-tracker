@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Card } from "@/components/common/card";
-import { getAnalyticsSnapshot, getUsdKrwRate, type FxRateSnapshot } from "@/lib/mvp-store";
+import { DEFAULT_TIMEFRAME_LABEL, getAnalyticsSnapshot, getUsdKrwRate, type FxRateSnapshot } from "@/lib/mvp-store";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 
 export function AnalyticsClient() {
@@ -15,19 +15,16 @@ export function AnalyticsClient() {
   }, []);
 
   if (!analytics) {
-    return <div className="text-sm text-slate-300">분석 데이터를 불러오는 중...</div>;
+    return <div className="text-sm text-slate-300">분석 데이터를 불러오는 중입니다.</div>;
   }
 
   return (
     <div className="space-y-6">
       <div>
         <p className="text-sm uppercase tracking-[0.3em] text-cyan-300">Analytics</p>
-        <h1 className="mt-2 text-4xl font-semibold">원화 기준 손익 분석</h1>
-        {fx ? (
-          <p className="mt-2 text-sm text-slate-400">
-            해외 종목은 체결 시점 환율을 저장해 원화로 환산합니다. 현재 참고 환율은 $1 = {formatCurrency(fx.rate, "KRW")} 입니다.
-          </p>
-        ) : null}
+        <h1 className="mt-2 text-4xl font-semibold">원화 기준 수익 분석</h1>
+        <p className="mt-2 text-sm text-slate-400">{DEFAULT_TIMEFRAME_LABEL} 기준 앱이지만 손익은 체결 시점 환율을 적용한 원화 기준으로 비교합니다.</p>
+        {fx ? <p className="mt-2 text-sm text-slate-400">현재 참고 환율: $1 = {formatCurrency(fx.rate, "KRW")}</p> : null}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

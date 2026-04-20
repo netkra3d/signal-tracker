@@ -9,6 +9,13 @@ type UpbitCandleResponse = {
   candle_acc_trade_volume: number;
 };
 
+type UpbitTickerResponse = Array<{
+  trade_price: number;
+  prev_closing_price: number;
+  market_state: string;
+  timestamp: number;
+}>;
+
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, { params }: { params: Promise<{ symbol: string }> }) {
@@ -16,20 +23,30 @@ export async function GET(request: Request, { params }: { params: Promise<{ symb
   const url = new URL(request.url);
   const count = Number(url.searchParams.get("count") ?? "200");
 
-  const upstream = await fetch(
-    `https://api.upbit.com/v1/candles/minutes/60?market=${encodeURIComponent(symbol)}&count=${count}`,
-    {
+  const [candlesResponse, tickerResponse] = await Promise.all([
+    fetch(`https://api.upbit.com/v1/candles/minutes/240?market=${encodeURIComponent(symbol)}&count=${count}`, {
       headers: { Accept: "application/json" },
       cache: "no-store",
-    }
-  );
+    }),
+    fetch(`https://api.upbit.com/v1/ticker?markets=${encodeURIComponent(symbol)}`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    }),
+  ]);
 
-  if (!upstream.ok) {
-    return NextResponse.json({ message: "업비트 데이터를 가져오지 못했습니다." }, { status: upstream.status });
+  if (!candlesResponse.ok) {
+    return NextResponse.json({ message: "Failed to load Upbit 240m candles." }, { status: candlesResponse.status });
   }
 
-  const data = (await upstream.json()) as UpbitCandleResponse[];
-  const candles = data
+  if (!tickerResponse.ok) {
+    return NextResponse.json({ message: "Failed to load Upbit quote." }, { status: tickerResponse.status });
+  }
+
+  const candleData = (await candlesResponse.json()) as UpbitCandleResponse[];
+  const tickerData = (await tickerResponse.json()) as UpbitTickerResponse;
+  const ticker = tickerData[0];
+
+  const candles = candleData
     .map((item) => ({
       time: `${item.candle_date_time_utc}Z`,
       open: item.opening_price,
@@ -40,6 +57,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ symb
     }))
     .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
 
-  return NextResponse.json({ symbol, candles });
+  return NextResponse.json({
+    symbol,
+    timeframe: "240m",
+    candles,
+    quote: ticker
+      ? {
+          assetCode: symbol,
+          price: ticker.trade_price,
+          currency: "KRW",
+          timestamp: new Date(ticker.timestamp).toISOString(),
+          source: "upbit",
+          isMarketOpen: ticker.market_state === "ACTIVE",
+          previousClose: ticker.prev_closing_price,
+        }
+      : null,
+  });
 }
-
