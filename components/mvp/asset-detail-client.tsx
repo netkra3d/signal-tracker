@@ -6,6 +6,18 @@ import { Card } from "@/components/common/card";
 import { DEFAULT_TIMEFRAME_LABEL, calculateStagePlan, getAssetDetail, getSignalLabel, getSettings, isActionableBuySignal } from "@/lib/mvp-store";
 import { formatCurrency, formatDateTime, formatPercent } from "@/lib/utils";
 
+function getQuoteMetaLabel(marketType: string, isStale?: boolean, isMarketOpen?: boolean) {
+  if (isStale) {
+    return "실시간 조회 실패, 저장된 마지막 값";
+  }
+
+  if (marketType === "US_STOCK") {
+    return isMarketOpen ? "미국장 최신 반영 시각 (한국시간)" : "미국장 마지막 반영 시각 (한국시간)";
+  }
+
+  return "최신 반영 시각";
+}
+
 export function AssetDetailClient({ code }: { code: string }) {
   const [detail, setDetail] = useState<Awaited<ReturnType<typeof getAssetDetail>> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,7 +67,8 @@ export function AssetDetailClient({ code }: { code: string }) {
         </div>
         <div className="rounded-3xl border border-white/10 bg-white/5 px-5 py-4 text-sm">
           <p>현재가: {formatCurrency(quote?.price ?? 0, asset.currency)}</p>
-          <p>현재가 시각: {quote ? formatDateTime(quote.timestamp) : "없음"}</p>
+          <p>{getQuoteMetaLabel(asset.marketType, quote?.isStale, quote?.isMarketOpen)}: {quote ? formatDateTime(quote.timestamp) : "없음"}</p>
+          <p>{asset.marketType === "US_STOCK" ? quote?.isMarketOpen ? "미국장 진행중" : "미국장 마감 또는 개장 전" : "국내 시장 기준"}</p>
           <p>신호 기준봉 종가: {formatCurrency(latestSignal?.signalPrice ?? last?.close ?? 0, asset.currency)}</p>
           <p>현재 상태: {latestSignal ? getSignalLabel(latestSignal) : "관망"}</p>
         </div>

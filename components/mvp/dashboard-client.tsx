@@ -28,6 +28,18 @@ import { SignalView } from "@/types/signal";
 type AnalyticsRow = ReturnType<typeof getAnalyticsSnapshot>;
 type PositionRows = ReturnType<typeof getPositions>;
 
+function getQuoteMetaLabel(marketType: string, isStale?: boolean, isMarketOpen?: boolean) {
+  if (isStale) {
+    return "실시간 조회 실패, 저장된 마지막 값";
+  }
+
+  if (marketType === "US_STOCK") {
+    return isMarketOpen ? "미국장 최신 반영 시각 (한국시간)" : "미국장 마지막 반영 시각 (한국시간)";
+  }
+
+  return "최신 반영 시각";
+}
+
 export function DashboardClient() {
   const [analytics, setAnalytics] = useState<AnalyticsRow | null>(null);
   const [positions, setPositions] = useState<PositionRows>([]);
@@ -183,8 +195,12 @@ export function DashboardClient() {
               <div key={asset.code} className="rounded-2xl border border-white/10 bg-black/15 p-4 text-sm">
                 <p className="font-medium text-white">{asset.name}</p>
                 <p className="mt-2 text-cyan-100">{formatCurrency(quote?.price ?? 0, asset.currency)}</p>
+                <p className="mt-1 text-slate-400">{getQuoteMetaLabel(asset.marketType, quote?.isStale, quote?.isMarketOpen)}</p>
                 <p className="mt-1 text-slate-400">{quote ? formatDateTime(quote.timestamp) : "시각 없음"}</p>
-                <p className="mt-1 text-slate-500">{quote?.source ?? "cache"}</p>
+                <p className="mt-1 text-slate-500">
+                  {quote?.source ?? "cache"}
+                  {asset.marketType === "US_STOCK" ? quote?.isMarketOpen ? " / 미국장 진행중" : " / 미국장 마감 또는 개장 전" : ""}
+                </p>
               </div>
             );
           })}
