@@ -16,7 +16,7 @@ export function TradeForm({
   onCreateTrade,
 }: {
   assets: AssetOption[];
-  onCreateTrade: (input: TradeFormInput) => void;
+  onCreateTrade: (input: TradeFormInput) => Promise<void> | void;
 }) {
   const settings = useMemo(() => getSettings(), []);
   const [submitting, setSubmitting] = useState(false);
@@ -48,7 +48,7 @@ export function TradeForm({
     event.preventDefault();
     setSubmitting(true);
     try {
-      onCreateTrade({
+      await onCreateTrade({
         ...form,
         side: form.side as TradeFormInput["side"],
         stage: form.stage as TradeFormInput["stage"],
@@ -159,7 +159,7 @@ export function TradeForm({
         </label>
 
         <label className="space-y-2 text-sm">
-          <span>수수료(고정값)</span>
+          <span>수수료</span>
           <input
             type="number"
             step="0.0001"
@@ -182,11 +182,14 @@ export function TradeForm({
         <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-4 text-sm text-cyan-100">
           총액 자동 계산: {amount.toLocaleString("ko-KR")}
         </div>
-        <button type="submit" disabled={submitting} className="rounded-2xl bg-cyan-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:opacity-50">
+        <button
+          type="submit"
+          disabled={submitting}
+          className="rounded-2xl bg-cyan-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:opacity-50"
+        >
           {submitting ? "저장 중..." : "거래 저장"}
         </button>
       </form>
     </div>
   );
 }
-

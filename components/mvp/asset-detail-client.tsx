@@ -12,6 +12,7 @@ export function AssetDetailClient({ code }: { code: string }) {
 
   useEffect(() => {
     let active = true;
+
     async function load() {
       const next = await getAssetDetail(code);
       if (!active) {
@@ -20,6 +21,7 @@ export function AssetDetailClient({ code }: { code: string }) {
       setDetail(next);
       setLoading(false);
     }
+
     void load();
     return () => {
       active = false;
@@ -47,9 +49,7 @@ export function AssetDetailClient({ code }: { code: string }) {
         <div>
           <p className="text-sm uppercase tracking-[0.3em] text-cyan-300">{asset.marketType}</p>
           <h1 className="mt-2 text-4xl font-semibold">{asset.name}</h1>
-          <p className="mt-2 text-slate-400">
-            {asset.supportsLiveData ? "업비트 실데이터 60분봉 기준" : "샘플 또는 수동 보조 데이터 기준"}으로 신호와 분할 진입을 계산합니다.
-          </p>
+          <p className="mt-2 text-slate-400">차트와 신호 가격은 모두 자산 원통화 기준으로 표시합니다.</p>
         </div>
         <div className="rounded-3xl border border-white/10 bg-white/5 px-5 py-4 text-sm">
           <p>현재가: {formatCurrency(last?.close ?? 0, asset.currency)}</p>
@@ -106,4 +106,3 @@ export function AssetDetailClient({ code }: { code: string }) {
     </div>
   );
 }
-

@@ -5,6 +5,7 @@ import { calculateAnalytics } from "@/lib/analytics";
 import { enrichCandles } from "@/lib/indicators";
 import { calculateSellPnl, calculateTradeAmount, reduceTradesToPosition } from "@/lib/pnl";
 import { generateSignal } from "@/lib/signal-engine";
+import { round } from "@/lib/utils";
 import { Candle, IndicatorPoint } from "@/types/candle";
 import { SignalView } from "@/types/signal";
 import { PositionSnapshot, TradeFormInput } from "@/types/trade";
@@ -14,7 +15,7 @@ export type MvpAsset = {
   code: string;
   name: string;
   symbol: string;
-  currency: string;
+  currency: "KRW" | "USD";
   marketType: "UPBIT" | "US_STOCK" | "KR_ETF";
   isActive: boolean;
   supportsLiveData: boolean;
@@ -33,6 +34,11 @@ export type LocalTradeRecord = {
   realizedPnl: number;
   realizedReturn: number;
   cumulativePnl: number;
+  exchangeRate: number;
+  krwAmount: number;
+  krwFee: number;
+  krwRealizedPnl: number;
+  krwCumulativePnl: number;
   memo?: string;
   signalId?: string;
 };
@@ -49,6 +55,13 @@ export type AppSettings = {
 export type ImportMeta = {
   lastImportedAt: string | null;
   version: number;
+};
+
+export type FxRateSnapshot = {
+  base: "USD";
+  quote: "KRW";
+  rate: number;
+  fetchedAt: string;
 };
 
 export type ExportPayload = {
@@ -82,9 +95,10 @@ export const STORAGE_KEYS = {
   customNotes: "signal-tracker:mvp:notes",
   importMeta: "signal-tracker:mvp:import-meta",
   appUnlocked: "signal-tracker:mvp:unlocked",
+  fxUsdKrw: "signal-tracker:mvp:fx-usd-krw",
 } as const;
 
-export const EXPORT_VERSION = 1;
+export const EXPORT_VERSION = 2;
 
 export const DEFAULT_SETTINGS: AppSettings = {
   defaultFeeRate: 0.05,
@@ -124,7 +138,7 @@ function getBasePrice(asset: MvpAsset) {
     case "BTC_KRW":
       return 98_000_000;
     case "USDT_KRW":
-      return 1380;
+      return 1_380;
     case "VOO":
       return 520;
     case "QQQ":
@@ -143,7 +157,7 @@ function getBasePrice(asset: MvpAsset) {
 }
 
 function getBaseVolume(asset: MvpAsset) {
-  return asset.currency === "KRW" ? 1000 : 10_000;
+  return asset.currency === "KRW" ? 1_000 : 10_000;
 }
 
 function createMockCandles(asset: MvpAsset, length = 220): Candle[] {
@@ -164,10 +178,10 @@ function createMockCandles(asset: MvpAsset, length = 220): Candle[] {
 
     candles.push({
       time: time.toISOString(),
-      open: Number(open.toFixed(asset.currency === "KRW" ? 2 : 4)),
-      high: Number(high.toFixed(asset.currency === "KRW" ? 2 : 4)),
-      low: Number(low.toFixed(asset.currency === "KRW" ? 2 : 4)),
-      close: Number(close.toFixed(asset.currency === "KRW" ? 2 : 4)),
+      open: Number(open.toFixed(asset.currency === "KRW" ? 0 : 2)),
+      high: Number(high.toFixed(asset.currency === "KRW" ? 0 : 2)),
+      low: Number(low.toFixed(asset.currency === "KRW" ? 0 : 2)),
+      close: Number(close.toFixed(asset.currency === "KRW" ? 0 : 2)),
       volume: Number(volume.toFixed(2)),
     });
 
@@ -219,9 +233,7 @@ function getUpbitProvider(): MarketDataProvider {
         return createMockCandles(asset);
       }
 
-      const response = await fetch(`/api/market-data/upbit/${asset.symbol}?count=200`, {
-        cache: "no-store",
-      });
+      const response = await fetch(`/api/market-data/upbit/${asset.symbol}?count=200`, { cache: "no-store" });
       if (!response.ok) {
         throw new Error(`Failed to fetch live candles for ${asset.code}`);
       }
@@ -246,6 +258,7 @@ export const marketDataRepository = {
     if (!asset) {
       return [] as Candle[];
     }
+
     const provider = getMarketDataProvider(asset);
     const candles = await provider.getCandles(asset);
     const candleMap = readStorage<Record<string, Candle[]>>(STORAGE_KEYS.candles, {});
@@ -279,6 +292,12 @@ export const storageRepository = {
   },
   writeImportMeta(meta: ImportMeta) {
     writeStorage(STORAGE_KEYS.importMeta, meta);
+  },
+  readFxUsdKrw() {
+    return readStorage<FxRateSnapshot | null>(STORAGE_KEYS.fxUsdKrw, null);
+  },
+  writeFxUsdKrw(snapshot: FxRateSnapshot) {
+    writeStorage(STORAGE_KEYS.fxUsdKrw, snapshot);
   },
 };
 
@@ -322,12 +341,54 @@ export async function loadCandlesForAsset(code: string) {
   }
 }
 
-function createSignalView(asset: MvpAsset, point: IndicatorPoint, generated: ReturnType<typeof generateSignal>, index: number): SignalView {
-  const summary =
-    generated?.signalType === "BUY"
-      ? "매수 후보: EMA 정배열, RSI 중립 강세, 거래량 확인"
-      : "매도 후보: EMA 이탈 또는 MACD 둔화";
+export async function getUsdKrwRate(forceRefresh = false) {
+  const cached = storageRepository.readFxUsdKrw();
+  const now = Date.now();
+  const cacheAge = cached ? now - new Date(cached.fetchedAt).getTime() : Number.POSITIVE_INFINITY;
 
+  if (!forceRefresh && cached && cacheAge < 1000 * 60 * 60) {
+    return cached;
+  }
+
+  try {
+    const response = await fetch("/api/fx/usd-krw", { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error("FX fetch failed");
+    }
+
+    const snapshot = (await response.json()) as FxRateSnapshot;
+    storageRepository.writeFxUsdKrw(snapshot);
+    return snapshot;
+  } catch {
+    if (cached) {
+      return cached;
+    }
+
+    const fallback: FxRateSnapshot = {
+      base: "USD",
+      quote: "KRW",
+      rate: 1_350,
+      fetchedAt: new Date().toISOString(),
+    };
+    storageRepository.writeFxUsdKrw(fallback);
+    return fallback;
+  }
+}
+
+export function getSignalLabel(signal: SignalView | null) {
+  if (!signal) {
+    return "관망";
+  }
+
+  return signal.signalType === "BUY" ? "매수 후보" : "매도 후보";
+}
+
+function createSignalView(
+  asset: MvpAsset,
+  point: IndicatorPoint,
+  generated: ReturnType<typeof generateSignal>,
+  index: number
+): SignalView {
   return {
     id: `${asset.code}-${point.time}-${generated?.signalType ?? "NONE"}-${index}`,
     assetCode: asset.code,
@@ -339,7 +400,11 @@ function createSignalView(asset: MvpAsset, point: IndicatorPoint, generated: Ret
     signalPrice: generated?.signalPrice ?? point.close,
     stopPrice: generated?.stopPrice ?? null,
     targetPrice: generated?.targetPrice ?? null,
-    reasonSummary: generated?.reasonSummary ?? summary,
+    reasonSummary:
+      generated?.reasonSummary ??
+      (generated?.signalType === "BUY"
+        ? "매수 후보: EMA 정배열, RSI 중립 강세, 거래량 확인"
+        : "매도 후보: EMA 이탈 또는 MACD 둔화"),
     status: "NEW",
   };
 }
@@ -352,6 +417,7 @@ export function getSignalsFromCandles(assetCode: string, candles: Candle[]) {
 
   const indicators = enrichCandles(candles.slice(-200));
   const signals: SignalView[] = [];
+
   for (let index = 60; index < indicators.length; index += 1) {
     const generated = generateSignal(indicators.slice(0, index + 1));
     if (!generated) {
@@ -363,24 +429,16 @@ export function getSignalsFromCandles(assetCode: string, candles: Candle[]) {
     if (previous && previous.timestamp === point.time && previous.signalType === generated.signalType) {
       continue;
     }
+
     signals.push(createSignalView(asset, point, generated, index));
   }
 
   return signals.slice(-12);
 }
 
-export function getSignalLabel(signal: SignalView | null) {
-  if (!signal) {
-    return "관망";
-  }
-  return signal.signalType === "BUY" ? "매수 후보" : "매도 후보";
-}
-
 export function getRecentSignals() {
-  return MVP_ASSETS.map((asset) => {
-    const latest = getSignalsFromCandles(asset.code, getCachedCandles(asset.code)).at(-1) ?? null;
-    return latest;
-  }).filter(Boolean) as SignalView[];
+  return MVP_ASSETS.map((asset) => getSignalsFromCandles(asset.code, getCachedCandles(asset.code)).at(-1))
+    .filter(Boolean) as SignalView[];
 }
 
 export function readTrades() {
@@ -410,9 +468,11 @@ export function validateTradeInput(input: TradeFormInput) {
   if (!asset) {
     return { ok: false as const, message: "자산을 찾을 수 없습니다." };
   }
+
   if (input.quantity <= 0 || input.price <= 0) {
     return { ok: false as const, message: "수량과 가격은 0보다 커야 합니다." };
   }
+
   if (input.fee !== undefined && input.fee < 0) {
     return { ok: false as const, message: "수수료는 음수가 될 수 없습니다." };
   }
@@ -422,6 +482,7 @@ export function validateTradeInput(input: TradeFormInput) {
     if (!position || position.quantity <= 0) {
       return { ok: false as const, message: "보유 수량이 없어 매도할 수 없습니다." };
     }
+
     if (input.quantity > position.quantity) {
       return { ok: false as const, message: "보유 수량보다 많이 매도할 수 없습니다." };
     }
@@ -430,12 +491,27 @@ export function validateTradeInput(input: TradeFormInput) {
   return { ok: true as const };
 }
 
-export function saveTrade(input: TradeFormInput) {
+function convertToKrw(value: number, currency: "KRW" | "USD", exchangeRate: number) {
+  if (currency === "KRW") {
+    return round(value, 0);
+  }
+
+  return round(value * exchangeRate, 0);
+}
+
+export async function saveTrade(input: TradeFormInput) {
   const validation = validateTradeInput(input);
   if (!validation.ok) {
     throw new Error(validation.message);
   }
 
+  const asset = getAssetById(input.assetId);
+  if (!asset) {
+    throw new Error("자산을 찾을 수 없습니다.");
+  }
+
+  const fx = await getUsdKrwRate();
+  const exchangeRate = asset.currency === "USD" ? fx.rate : 1;
   const trades = readTrades();
   const assetTrades = trades
     .filter((trade) => trade.assetId === input.assetId)
@@ -453,7 +529,13 @@ export function saveTrade(input: TradeFormInput) {
     realizedReturn = sellMetrics.realizedReturn;
   }
 
+  const krwAmount = convertToKrw(amount, asset.currency, exchangeRate);
+  const krwFee = convertToKrw(fee, asset.currency, exchangeRate);
+  const krwRealizedPnl = convertToKrw(realizedPnl, asset.currency, exchangeRate);
+  const krwCumulativePnl =
+    round(trades.reduce((sum, trade) => sum + (trade.krwRealizedPnl ?? trade.realizedPnl), 0) + krwRealizedPnl, 0);
   const cumulativePnl = trades.reduce((sum, trade) => sum + trade.realizedPnl, 0) + realizedPnl;
+
   const record: LocalTradeRecord = {
     id: `${input.assetId}-${Date.now()}`,
     assetId: input.assetId,
@@ -467,6 +549,11 @@ export function saveTrade(input: TradeFormInput) {
     realizedPnl,
     realizedReturn,
     cumulativePnl,
+    exchangeRate,
+    krwAmount,
+    krwFee,
+    krwRealizedPnl,
+    krwCumulativePnl,
     memo: input.memo,
     signalId: input.signalId,
   };
@@ -514,7 +601,7 @@ export function getAnalyticsSnapshot() {
     .map((trade) => ({
       assetCode: getAssetById(trade.assetId)?.code ?? "UNKNOWN",
       executedAt: new Date(trade.executedAt),
-      realizedPnl: trade.realizedPnl,
+      realizedPnl: trade.krwRealizedPnl ?? trade.realizedPnl,
       realizedReturn: trade.realizedReturn,
     }));
 
@@ -569,18 +656,38 @@ export function exportLocalData(): ExportPayload {
 }
 
 export function importLocalData(payload: ExportPayload) {
-  if (payload.version !== EXPORT_VERSION) {
+  if (payload.version > EXPORT_VERSION) {
     throw new Error("지원하지 않는 백업 파일 버전입니다.");
   }
+
   if (!Array.isArray(payload.trades)) {
     throw new Error("거래 데이터 형식이 올바르지 않습니다.");
   }
 
-  storageRepository.writeTrades(payload.trades);
+  const migratedTrades = payload.trades.map((trade) => {
+    if ("exchangeRate" in trade) {
+      return trade as LocalTradeRecord;
+    }
+
+    const legacy = trade as LocalTradeRecord;
+    const asset = getAssetById(legacy.assetId);
+    const exchangeRate = asset?.currency === "USD" ? 1_350 : 1;
+
+    return {
+      ...legacy,
+      exchangeRate,
+      krwAmount: convertToKrw(legacy.amount, asset?.currency ?? "KRW", exchangeRate),
+      krwFee: convertToKrw(legacy.fee, asset?.currency ?? "KRW", exchangeRate),
+      krwRealizedPnl: convertToKrw(legacy.realizedPnl, asset?.currency ?? "KRW", exchangeRate),
+      krwCumulativePnl: convertToKrw(legacy.cumulativePnl, asset?.currency ?? "KRW", exchangeRate),
+    };
+  });
+
+  storageRepository.writeTrades(migratedTrades);
   storageRepository.writeSettings({ ...DEFAULT_SETTINGS, ...payload.settings });
   storageRepository.writeNotes(payload.customNotes ?? {});
   storageRepository.writeImportMeta({
-    version: payload.version,
+    version: EXPORT_VERSION,
     lastImportedAt: new Date().toISOString(),
   });
 }

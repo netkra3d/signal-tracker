@@ -34,4 +34,3 @@ export function AppShell({ children }: PropsWithChildren) {
     </div>
   );
 }
-

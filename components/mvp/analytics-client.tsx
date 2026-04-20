@@ -2,14 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { Card } from "@/components/common/card";
-import { getAnalyticsSnapshot } from "@/lib/mvp-store";
+import { getAnalyticsSnapshot, getUsdKrwRate, type FxRateSnapshot } from "@/lib/mvp-store";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 
 export function AnalyticsClient() {
   const [analytics, setAnalytics] = useState<ReturnType<typeof getAnalyticsSnapshot> | null>(null);
+  const [fx, setFx] = useState<FxRateSnapshot | null>(null);
 
   useEffect(() => {
     setAnalytics(getAnalyticsSnapshot());
+    void getUsdKrwRate().then(setFx);
   }, []);
 
   if (!analytics) {
@@ -20,25 +22,30 @@ export function AnalyticsClient() {
     <div className="space-y-6">
       <div>
         <p className="text-sm uppercase tracking-[0.3em] text-cyan-300">Analytics</p>
-        <h1 className="mt-2 text-4xl font-semibold">일간, 월간, 연간 성과 분석</h1>
+        <h1 className="mt-2 text-4xl font-semibold">원화 기준 손익 분석</h1>
+        {fx ? (
+          <p className="mt-2 text-sm text-slate-400">
+            해외 종목은 체결 시점 환율을 저장해 원화로 환산합니다. 현재 참고 환율은 $1 = {formatCurrency(fx.rate, "KRW")} 입니다.
+          </p>
+        ) : null}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
           <p className="text-sm text-slate-400">오늘 수익</p>
-          <p className="mt-3 text-3xl font-semibold">{formatCurrency(analytics.todayRealizedPnl)}</p>
+          <p className="mt-3 text-3xl font-semibold">{formatCurrency(analytics.todayRealizedPnl, "KRW")}</p>
         </Card>
         <Card>
           <p className="text-sm text-slate-400">이번 달 수익</p>
-          <p className="mt-3 text-3xl font-semibold">{formatCurrency(analytics.monthRealizedPnl)}</p>
+          <p className="mt-3 text-3xl font-semibold">{formatCurrency(analytics.monthRealizedPnl, "KRW")}</p>
         </Card>
         <Card>
           <p className="text-sm text-slate-400">올해 수익</p>
-          <p className="mt-3 text-3xl font-semibold">{formatCurrency(analytics.yearRealizedPnl)}</p>
+          <p className="mt-3 text-3xl font-semibold">{formatCurrency(analytics.yearRealizedPnl, "KRW")}</p>
         </Card>
         <Card>
           <p className="text-sm text-slate-400">총 누적 수익</p>
-          <p className="mt-3 text-3xl font-semibold">{formatCurrency(analytics.totalRealizedPnl)}</p>
+          <p className="mt-3 text-3xl font-semibold">{formatCurrency(analytics.totalRealizedPnl, "KRW")}</p>
         </Card>
       </div>
 
@@ -48,7 +55,7 @@ export function AnalyticsClient() {
           <div className="space-y-3 text-sm">
             <p>승률: {formatPercent(analytics.winRate)}</p>
             <p>평균 수익률: {formatPercent(analytics.avgReturnRate)}</p>
-            <p>최대 손실: {formatCurrency(analytics.maxLoss)}</p>
+            <p>최대 손실: {formatCurrency(analytics.maxLoss, "KRW")}</p>
             <p>최대 연속 손실: {analytics.maxConsecutiveLosses}</p>
             <p>거래 횟수: {analytics.tradeCount}</p>
           </div>
@@ -75,4 +82,3 @@ export function AnalyticsClient() {
     </div>
   );
 }
-

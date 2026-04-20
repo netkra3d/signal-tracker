@@ -17,8 +17,8 @@ import {
 export function SettingsClient() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [message, setMessage] = useState("");
-  const fileRef = useRef<HTMLInputElement | null>(null);
   const [ready, setReady] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setSettings(getSettings());
@@ -94,7 +94,7 @@ export function SettingsClient() {
           <h2 className="mb-4 text-lg font-semibold">기본 전략 설정</h2>
           <div className="grid gap-4 md:grid-cols-2">
             <label className="space-y-2 text-sm">
-              <span>기본 수수료(%)</span>
+              <span>기본 수수료(고정값)</span>
               <input
                 type="number"
                 step="0.01"
@@ -189,7 +189,7 @@ export function SettingsClient() {
               <span>브라우저 잠금 사용</span>
             </label>
             <p className="text-slate-400">
-              현재 잠금은 브라우저 단 간단 보호용입니다. 민감 정보는 저장하지 않으며, 배포 후에도 본인 기기에서만 가볍게 접근을 제한하는 수준입니다.
+              현재 잠금은 브라우저 단 간단 보호용입니다. 민감 정보는 저장하지 않으며, 본인 기기에서만 가볍게 접근을 제한하는 수준입니다.
             </p>
           </div>
         </Card>

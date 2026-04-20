@@ -31,6 +31,10 @@ export function formatCurrency(value: number, currency = "KRW") {
   }).format(value);
 }
 
+export function formatKrwEquivalent(value: number) {
+  return `원화환산 ${formatCurrency(value, "KRW")}`;
+}
+
 export function formatPercent(value: number) {
   return `${round(value, 2).toFixed(2)}%`;
 }

@@ -17,7 +17,7 @@ export function PositionsTable({ positions }: { positions: PositionRow[] }) {
     <Card>
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">보유 포지션</h2>
-        <span className="text-xs text-slate-400">현재 수량, 평균단가, 평가손익</span>
+        <span className="text-xs text-slate-400">자산 원통화 기준</span>
       </div>
       {positions.length === 0 ? (
         <p className="text-sm text-slate-400">아직 기록된 포지션이 없습니다.</p>
@@ -58,4 +58,3 @@ export function PositionsTable({ positions }: { positions: PositionRow[] }) {
     </Card>
   );
 }
-
