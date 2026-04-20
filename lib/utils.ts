@@ -45,8 +45,18 @@ export function formatPercent(value: number) {
   return `${round(value, 2).toFixed(2)}%`;
 }
 
+const KOREA_TIMEZONE = "Asia/Seoul";
+
 export function formatDateTime(value: string | Date) {
-  return new Date(value).toLocaleString("ko-KR");
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: KOREA_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(value));
 }
 
 export function asChartTime(value: string | Date) {

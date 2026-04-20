@@ -41,6 +41,7 @@ export type QuoteSnapshot = {
   timestamp: string;
   source: string;
   isMarketOpen: boolean;
+  isExtendedHours?: boolean;
   isStale?: boolean;
   previousClose?: number | null;
 };
@@ -124,7 +125,7 @@ type ProviderResponse = {
 
 type MarketDataProvider = {
   key: string;
-  getSnapshot: (asset: MvpAsset) => Promise<MarketDataSnapshot>;
+  getSnapshot: (asset: MvpAsset, forceRefresh?: boolean) => Promise<MarketDataSnapshot>;
 };
 
 export const STORAGE_KEYS = {
@@ -370,10 +371,11 @@ function normalizeQuote(asset: MvpAsset, quote: QuoteSnapshot | null, candles: C
   return createMockQuote(asset, candles);
 }
 
-async function fetchProviderResponse(url: string) {
-  const response = await fetch(url, { cache: "no-store" });
+async function fetchProviderResponse(url: string, forceRefresh = false) {
+  const nextUrl = forceRefresh ? `${url}${url.includes("?") ? "&" : "?"}refresh=${Date.now()}` : url;
+  const response = await fetch(nextUrl, { cache: "no-store" });
   if (!response.ok) {
-    throw new Error(`Failed to fetch ${url}`);
+    throw new Error(`Failed to fetch ${nextUrl}`);
   }
 
   return (await response.json()) as ProviderResponse;
@@ -408,8 +410,8 @@ function getMockProvider(): MarketDataProvider {
 function getUpbitProvider(): MarketDataProvider {
   return {
     key: "upbit-live",
-    async getSnapshot(asset) {
-      const data = await fetchProviderResponse(`/api/market-data/upbit/${asset.symbol}?count=${CANDLE_LIMIT}`);
+    async getSnapshot(asset, forceRefresh = false) {
+      const data = await fetchProviderResponse(`/api/market-data/upbit/${asset.symbol}?count=${CANDLE_LIMIT}`, forceRefresh);
       return buildSnapshot(asset, data);
     },
   };
@@ -418,8 +420,8 @@ function getUpbitProvider(): MarketDataProvider {
 function getUsProvider(): MarketDataProvider {
   return {
     key: "us-live",
-    async getSnapshot(asset) {
-      const data = await fetchProviderResponse(`/api/market-data/us/${asset.symbol}?count=${CANDLE_LIMIT}`);
+    async getSnapshot(asset, forceRefresh = false) {
+      const data = await fetchProviderResponse(`/api/market-data/us/${asset.symbol}?count=${CANDLE_LIMIT}`, forceRefresh);
       return buildSnapshot(asset, data);
     },
   };
@@ -453,14 +455,14 @@ function writeQuotesMap(value: Record<string, QuoteSnapshot>) {
 }
 
 export const marketDataRepository = {
-  async getSnapshot(assetCode: string) {
+  async getSnapshot(assetCode: string, forceRefresh = false) {
     const asset = getMvpAssetByCode(assetCode);
     if (!asset) {
       return null;
     }
 
     const provider = getMarketDataProvider(asset);
-    const snapshot = await provider.getSnapshot(asset);
+    const snapshot = await provider.getSnapshot(asset, forceRefresh);
 
     const candleMap = readCandlesMap();
     candleMap[asset.code] = snapshot.candles;
@@ -556,14 +558,14 @@ export function getCachedQuote(code: string) {
   return fallback;
 }
 
-export async function loadMarketDataForAsset(code: string) {
+export async function loadMarketDataForAsset(code: string, forceRefresh = false) {
   const asset = getMvpAssetByCode(code);
   if (!asset) {
     return null;
   }
 
   try {
-    return await marketDataRepository.getSnapshot(asset.code);
+    return await marketDataRepository.getSnapshot(asset.code, forceRefresh);
   } catch {
     const candles = getCachedCandles(asset.code);
     const quote = getCachedQuote(asset.code);
@@ -582,8 +584,8 @@ export async function loadCandlesForAsset(code: string) {
   return snapshot?.candles ?? [];
 }
 
-export async function loadQuoteForAsset(code: string) {
-  const snapshot = await loadMarketDataForAsset(code);
+export async function loadQuoteForAsset(code: string, forceRefresh = false) {
+  const snapshot = await loadMarketDataForAsset(code, forceRefresh);
   return snapshot?.quote ?? null;
 }
 
@@ -867,13 +869,13 @@ export function getAnalyticsSnapshot() {
   return calculateAnalytics(sellTrades);
 }
 
-export async function getAssetDetail(code: string) {
+export async function getAssetDetail(code: string, forceRefresh = false) {
   const asset = getMvpAssetByCode(code);
   if (!asset) {
     return null;
   }
 
-  const snapshot = await loadMarketDataForAsset(code);
+  const snapshot = await loadMarketDataForAsset(code, forceRefresh);
   const candles = snapshot?.candles ?? [];
   const quote = snapshot?.quote ?? null;
   const indicators = enrichCandles(candles);

@@ -17,11 +17,13 @@ type TwelveTimeSeriesResponse = {
 };
 
 type TwelveQuoteResponse = {
+  datetime?: string;
   close?: string;
   previous_close?: string;
   timestamp?: number;
   exchange?: string;
   is_market_open?: boolean;
+  is_extended_hours?: boolean;
   status?: string;
   code?: number;
   message?: string;
@@ -34,6 +36,26 @@ function parseNumber(value: string | number | undefined) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+async function fetchQuote(symbol: string, apiKey: string) {
+  const extendedUrl = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbol)}&interval=30min&prepost=true&apikey=${encodeURIComponent(apiKey)}`;
+  const regularUrl = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbol)}&interval=4h&apikey=${encodeURIComponent(apiKey)}`;
+
+  const extendedResponse = await fetch(extendedUrl, { cache: "no-store" });
+  if (extendedResponse.ok) {
+    const extendedData = (await extendedResponse.json()) as TwelveQuoteResponse;
+    if (extendedData.status !== "error") {
+      return extendedData;
+    }
+  }
+
+  const regularResponse = await fetch(regularUrl, { cache: "no-store" });
+  if (!regularResponse.ok) {
+    throw new Error("Failed to load US ETF quote.");
+  }
+
+  return (await regularResponse.json()) as TwelveQuoteResponse;
+}
+
 export async function GET(request: Request, { params }: { params: Promise<{ symbol: string }> }) {
   const apiKey = process.env.TWELVE_DATA_API_KEY;
   if (!apiKey) {
@@ -44,27 +66,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ symb
   const url = new URL(request.url);
   const count = Number(url.searchParams.get("count") ?? "200");
 
-  const [seriesResponse, quoteResponse] = await Promise.all([
+  const [seriesResponse, quoteData] = await Promise.all([
     fetch(
       `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=4h&outputsize=${count}&order=asc&timezone=America/New_York&apikey=${encodeURIComponent(apiKey)}`,
       { cache: "no-store" }
     ),
-    fetch(
-      `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbol)}&interval=4h&apikey=${encodeURIComponent(apiKey)}`,
-      { cache: "no-store" }
-    ),
+    fetchQuote(symbol, apiKey),
   ]);
 
   if (!seriesResponse.ok) {
     return NextResponse.json({ message: "Failed to load US ETF 240m candles." }, { status: seriesResponse.status });
   }
 
-  if (!quoteResponse.ok) {
-    return NextResponse.json({ message: "Failed to load US ETF quote." }, { status: quoteResponse.status });
-  }
-
   const seriesData = (await seriesResponse.json()) as TwelveTimeSeriesResponse;
-  const quoteData = (await quoteResponse.json()) as TwelveQuoteResponse;
 
   if (!seriesData.values || seriesData.status === "error") {
     return NextResponse.json({ message: seriesData.message ?? "US ETF time series error." }, { status: 502 });
@@ -85,7 +99,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ symb
 
   const latestTimestamp = quoteData.timestamp
     ? new Date(quoteData.timestamp * 1000).toISOString()
-    : candles.at(-1)?.time ?? new Date().toISOString();
+    : quoteData.datetime
+      ? new Date(quoteData.datetime.replace(" ", "T")).toISOString()
+      : candles.at(-1)?.time ?? new Date().toISOString();
 
   return NextResponse.json({
     symbol,
@@ -96,8 +112,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ symb
       price: parseNumber(quoteData.close ?? candles.at(-1)?.close),
       currency: "USD",
       timestamp: latestTimestamp,
-      source: quoteData.exchange ? `twelve-data:${quoteData.exchange}` : "twelve-data",
+      source: quoteData.exchange
+        ? `twelve-data:${quoteData.exchange}${quoteData.is_extended_hours ? ":extended" : ""}`
+        : quoteData.is_extended_hours
+          ? "twelve-data:extended"
+          : "twelve-data",
       isMarketOpen: Boolean(quoteData.is_market_open),
+      isExtendedHours: Boolean(quoteData.is_extended_hours),
       previousClose: quoteData.previous_close ? parseNumber(quoteData.previous_close) : null,
     },
   });
