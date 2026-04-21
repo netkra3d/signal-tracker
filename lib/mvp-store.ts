@@ -46,6 +46,12 @@ export type QuoteSnapshot = {
   previousClose?: number | null;
 };
 
+export type DashboardSignalView = SignalView & {
+  entryReferencePrice: number;
+  divergencePercent: number;
+  isDisplayable: true;
+};
+
 export type MarketDataSnapshot = {
   assetCode: string;
   timeframe: Timeframe;
@@ -680,12 +686,29 @@ export function getSignalsFromCandles(assetCode: string, candles: Candle[]) {
 }
 
 export function isActionableBuySignal(signal: SignalView, quote: QuoteSnapshot | null, thresholdPercent = 3) {
-  if (signal.signalType !== "BUY" || !quote) {
-    return false;
+  return Boolean(getDisplayableDashboardSignal(signal, quote, thresholdPercent) && signal.signalType === "BUY");
+}
+
+export function getDisplayableDashboardSignal(
+  signal: SignalView | null,
+  quote: QuoteSnapshot | null,
+  thresholdPercent = 3,
+): DashboardSignalView | null {
+  if (!signal || !quote || signal.signalPrice <= 0) {
+    return null;
   }
 
-  const divergence = Math.abs((quote.price - signal.signalPrice) / signal.signalPrice) * 100;
-  return divergence <= thresholdPercent;
+  const divergencePercent = Math.abs((quote.price - signal.signalPrice) / signal.signalPrice) * 100;
+  if (divergencePercent > thresholdPercent) {
+    return null;
+  }
+
+  return {
+    ...signal,
+    entryReferencePrice: quote.price,
+    divergencePercent,
+    isDisplayable: true,
+  };
 }
 
 export function getRecentSignals() {

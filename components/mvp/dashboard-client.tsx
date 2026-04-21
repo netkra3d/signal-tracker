@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Card } from "@/components/common/card";
 import { PositionsTable } from "@/components/dashboard/positions-table";
 import { SummaryCard } from "@/components/dashboard/summary-card";
-import { Card } from "@/components/common/card";
 import {
   getAnalyticsSnapshot,
   getCachedQuote,
+  getDisplayableDashboardSignal,
   getPositions,
   getRecentSignals,
   getSignalLabel,
@@ -17,7 +18,7 @@ import {
   type FxRateSnapshot,
   type QuoteSnapshot,
 } from "@/lib/mvp-store";
-import { formatCurrency, formatDateTime, formatPercent } from "@/lib/utils";
+import { cn, formatCurrency, formatDateTime } from "@/lib/utils";
 import { SignalView } from "@/types/signal";
 
 type AnalyticsRow = ReturnType<typeof getAnalyticsSnapshot>;
@@ -25,7 +26,7 @@ type PositionRows = ReturnType<typeof getPositions>;
 
 function getQuoteMetaLabel(marketType: string, quote: QuoteSnapshot | null) {
   if (!quote) {
-    return "시각 없음";
+    return "반영 시각 없음";
   }
 
   if (quote.isStale) {
@@ -61,6 +62,16 @@ function getQuoteStatusLabel(marketType: string, quote: QuoteSnapshot | null) {
   }
 
   return "국내 시장 반영";
+}
+
+function getSignalBoxClasses(signalType: SignalView["signalType"]) {
+  return signalType === "BUY"
+    ? "border-red-400/30 bg-red-500/10"
+    : "border-blue-400/30 bg-blue-500/10";
+}
+
+function getSignalTitleClasses(signalType: SignalView["signalType"]) {
+  return signalType === "BUY" ? "text-red-200" : "text-blue-200";
 }
 
 export function DashboardClient() {
@@ -122,7 +133,7 @@ export function DashboardClient() {
           <p className="text-sm uppercase tracking-[0.3em] text-cyan-300">Signal Tracker</p>
           <h1 className="mt-2 text-4xl font-semibold">종목 감시 대시보드</h1>
           <p className="mt-2 text-sm text-slate-400">
-            각 종목 카드에서 현재 실제 가격, 신호 상태, 신호 기준봉 가격을 한 번에 본다.
+            각 종목 카드에서 현재 실제 가격과 지금 행동 가능한 신호만 바로 본다.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -152,8 +163,8 @@ export function DashboardClient() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard title="승률" value={formatPercent(analytics.winRate)} />
-        <SummaryCard title="평균 수익률" value={formatPercent(analytics.avgReturnRate)} />
+        <SummaryCard title="승률" value={`${analytics.winRate.toFixed(2)}%`} />
+        <SummaryCard title="평균 수익률" value={`${analytics.avgReturnRate.toFixed(2)}%`} />
         <SummaryCard title="최대 손실" value={formatCurrency(analytics.maxLoss, "KRW")} />
         <SummaryCard title="거래 횟수" value={String(analytics.tradeCount)} />
       </div>
@@ -197,21 +208,26 @@ export function DashboardClient() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {assets.map((asset) => {
             const quote = getCachedQuote(asset.code);
-            const signal = signals.find((item) => item.assetCode === asset.code) ?? null;
+            const latestSignal = signals.find((item) => item.assetCode === asset.code) ?? null;
+            const signal = getDisplayableDashboardSignal(latestSignal, quote);
 
             return (
               <div key={asset.code} className="rounded-2xl border border-white/10 bg-black/15 p-4 text-sm">
                 <p className="font-medium text-white">{asset.name}</p>
-                <p className="mt-2 text-2xl font-semibold text-cyan-100">{formatCurrency(quote?.price ?? 0, asset.currency)}</p>
+                <p className="mt-2 text-2xl font-semibold text-cyan-100">
+                  {formatCurrency(quote?.price ?? 0, asset.currency)}
+                </p>
 
                 {signal ? (
-                  <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-3">
-                    <p className="font-medium text-white">
+                  <div className={cn("mt-3 rounded-2xl border p-3", getSignalBoxClasses(signal.signalType))}>
+                    <p className={cn("font-medium", getSignalTitleClasses(signal.signalType))}>
                       {asset.name} ({getSignalLabel(signal)})
                     </p>
-                    <p className="mt-2 text-slate-300">
+                    <p className="mt-2 text-slate-200">
                       신호 기준봉 종가 {formatCurrency(signal.signalPrice, asset.currency)}
-                      {signal.targetPrice ? ` / 목표가 ${formatCurrency(signal.targetPrice, asset.currency)}` : ""}
+                      {signal.signalType === "BUY"
+                        ? ` / 1차 참고가 ${formatCurrency(signal.entryReferencePrice, asset.currency)}`
+                        : ""}
                     </p>
                   </div>
                 ) : null}
