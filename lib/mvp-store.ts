@@ -161,6 +161,26 @@ export const DEFAULT_SETTINGS: AppSettings = {
 };
 
 export const MVP_ASSETS: MvpAsset[] = [
+  { id: "asset-voo", code: "VOO", name: "VOO", symbol: "VOO", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-qqq", code: "QQQ", name: "QQQ", symbol: "QQQ", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-dia", code: "DIA", name: "DIA", symbol: "DIA", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-iwm", code: "IWM", name: "IWM", symbol: "IWM", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-xlk", code: "XLK", name: "XLK", symbol: "XLK", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-xlf", code: "XLF", name: "XLF", symbol: "XLF", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-xli", code: "XLI", name: "XLI", symbol: "XLI", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-xlv", code: "XLV", name: "XLV", symbol: "XLV", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-xle", code: "XLE", name: "XLE", symbol: "XLE", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-xly", code: "XLY", name: "XLY", symbol: "XLY", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-xlp", code: "XLP", name: "XLP", symbol: "XLP", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-xlu", code: "XLU", name: "XLU", symbol: "XLU", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-xlc", code: "XLC", name: "XLC", symbol: "XLC", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-xlb", code: "XLB", name: "XLB", symbol: "XLB", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-xlre", code: "XLRE", name: "XLRE", symbol: "XLRE", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-smh", code: "SMH", name: "SMH", symbol: "SMH", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-xbi", code: "XBI", name: "XBI", symbol: "XBI", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-gld", code: "GLD", name: "GLD", symbol: "GLD", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-slv", code: "SLV", name: "SLV", symbol: "SLV", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  { id: "asset-tlt", code: "TLT", name: "TLT", symbol: "TLT", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
   {
     id: "asset-usdt-krw",
     code: "USDT_KRW",
@@ -183,13 +203,39 @@ export const MVP_ASSETS: MvpAsset[] = [
     supportsLiveData: true,
     provider: "upbit",
   },
-  { id: "asset-voo", code: "VOO", name: "VOO", symbol: "VOO", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
-  { id: "asset-qqq", code: "QQQ", name: "QQQ", symbol: "QQQ", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
-  { id: "asset-gld", code: "GLD", name: "GLD", symbol: "GLD", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
-  { id: "asset-slv", code: "SLV", name: "SLV", symbol: "SLV", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
-  { id: "asset-iwm", code: "IWM", name: "IWM", symbol: "IWM", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
-  { id: "asset-smh", code: "SMH", name: "SMH", symbol: "SMH", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
-  { id: "asset-xlk", code: "XLK", name: "XLK", symbol: "XLK", currency: "USD", marketType: "US_STOCK", isActive: true, supportsLiveData: true, provider: "twelve-data" },
+  {
+    id: "asset-eth-krw",
+    code: "ETH_KRW",
+    name: "업비트 이더리움",
+    symbol: "KRW-ETH",
+    currency: "KRW",
+    marketType: "UPBIT",
+    isActive: true,
+    supportsLiveData: true,
+    provider: "upbit",
+  },
+  {
+    id: "asset-sol-krw",
+    code: "SOL_KRW",
+    name: "업비트 솔라나",
+    symbol: "KRW-SOL",
+    currency: "KRW",
+    marketType: "UPBIT",
+    isActive: true,
+    supportsLiveData: true,
+    provider: "upbit",
+  },
+  {
+    id: "asset-xrp-krw",
+    code: "XRP_KRW",
+    name: "업비트 XRP",
+    symbol: "KRW-XRP",
+    currency: "KRW",
+    marketType: "UPBIT",
+    isActive: true,
+    supportsLiveData: true,
+    provider: "upbit",
+  },
 ];
 
 function ensureBrowser() {
@@ -223,10 +269,18 @@ function getBasePrice(asset: MvpAsset) {
       return 111_000_000;
     case "USDT_KRW":
       return 1_480;
+    case "ETH_KRW":
+      return 5_300_000;
+    case "SOL_KRW":
+      return 235_000;
+    case "XRP_KRW":
+      return 3_000;
     case "VOO":
       return 650;
     case "QQQ":
       return 645;
+    case "DIA":
+      return 425;
     case "GLD":
       return 445;
     case "SLV":
@@ -237,6 +291,30 @@ function getBasePrice(asset: MvpAsset) {
       return 460;
     case "XLK":
       return 154;
+    case "XLF":
+      return 52;
+    case "XLI":
+      return 145;
+    case "XLV":
+      return 138;
+    case "XLE":
+      return 96;
+    case "XLY":
+      return 215;
+    case "XLP":
+      return 82;
+    case "XLU":
+      return 78;
+    case "XLC":
+      return 97;
+    case "XLB":
+      return 92;
+    case "XLRE":
+      return 42;
+    case "XBI":
+      return 92;
+    case "TLT":
+      return 88;
     default:
       return 100;
   }
