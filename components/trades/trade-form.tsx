@@ -38,11 +38,11 @@ export function TradeForm({
   const selectedPosition = getPositionByAssetId(form.assetId);
   const selectedAsset = assets.find((asset) => asset.id === form.assetId);
   const amount = Number(form.quantity || 0) * Number(form.price || 0);
-  const modeLabel = form.side === "BUY" ? "매수 입력" : "매도 입력";
+  const modeLabel = form.side === "BUY" ? "매수 기록 입력" : "매도 기록 입력";
   const helperText =
     form.side === "BUY"
-      ? `${DEFAULT_TIMEFRAME_LABEL} 신호를 참고하더라도, 체결 가격은 실제 주문한 가격으로 기록하세요.`
-      : "매도는 보유 수량을 넘길 수 없고, 실현손익은 자동 계산됩니다.";
+      ? `${DEFAULT_TIMEFRAME_LABEL} 신호를 참고하더라도, 실제 체결된 가격으로 기록하면 된다.`
+      : "매도는 보유 수량보다 많이 입력할 수 없고, 실현손익은 자동 계산된다.";
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -78,7 +78,7 @@ export function TradeForm({
       {selectedPosition ? (
         <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
           <p>
-            현재 포지션 {selectedAsset?.name} / 보유 {formatNumber(selectedPosition.quantity, 8)} / 평균단가{" "}
+            현재 포지션 {selectedAsset?.name} / 보유 {formatNumber(selectedPosition.quantity, 8)} / 평균 매입가{" "}
             {formatCurrency(selectedPosition.avgEntryPrice, selectedPosition.asset.currency)}
           </p>
         </div>
@@ -101,7 +101,7 @@ export function TradeForm({
         </label>
 
         <label className="space-y-2 text-sm">
-          <span>매수/매도</span>
+          <span>매수 / 매도</span>
           <select
             className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3"
             value={form.side}
@@ -127,7 +127,7 @@ export function TradeForm({
         </label>
 
         <label className="space-y-2 text-sm">
-          <span>체결 시간</span>
+          <span>체결 시각</span>
           <input
             type="datetime-local"
             className="w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3"
@@ -179,7 +179,9 @@ export function TradeForm({
           />
         </label>
 
-        <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-4 text-sm text-cyan-100">총액 자동 계산: {formatNumber(amount, 4)}</div>
+        <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/5 p-4 text-sm text-cyan-100">
+          총액 자동 계산 {formatNumber(amount, 4)}
+        </div>
         <button
           type="submit"
           disabled={submitting}

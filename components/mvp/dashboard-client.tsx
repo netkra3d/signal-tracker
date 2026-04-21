@@ -223,12 +223,17 @@ export function DashboardClient() {
                     <p className={cn("font-medium", getSignalTitleClasses(signal.signalType))}>
                       {asset.name} ({getSignalLabel(signal)})
                     </p>
-                    <p className="mt-2 text-slate-200">
-                      신호 기준봉 종가 {formatCurrency(signal.signalPrice, asset.currency)}
-                      {signal.signalType === "BUY"
-                        ? ` / 1차 참고가 ${formatCurrency(signal.entryReferencePrice, asset.currency)}`
-                        : ""}
-                    </p>
+                    <div className="mt-2 space-y-1 text-slate-100">
+                      <p>신호가 나온 가격 {formatCurrency(signal.signalPrice, asset.currency)}</p>
+                      {signal.signalType === "BUY" ? (
+                        <>
+                          <p>현재 진입 참고가 {formatCurrency(signal.entryReferencePrice, asset.currency)}</p>
+                          {signal.stopPrice ? <p>손절가 {formatCurrency(signal.stopPrice, asset.currency)}</p> : null}
+                        </>
+                      ) : (
+                        <p>지금 매도 검토</p>
+                      )}
+                    </div>
                   </div>
                 ) : null}
 
