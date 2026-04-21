@@ -23,8 +23,17 @@ export function SettingsClient() {
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    setSettings(getSettings());
-    setReady(true);
+    const refresh = () => {
+      setSettings(getSettings());
+      setReady(true);
+    };
+
+    refresh();
+    window.addEventListener("signal-tracker:data-changed", refresh);
+
+    return () => {
+      window.removeEventListener("signal-tracker:data-changed", refresh);
+    };
   }, []);
 
   const importMeta = useMemo(() => storageRepository.readImportMeta(), [message]);

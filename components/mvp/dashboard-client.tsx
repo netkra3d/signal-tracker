@@ -114,11 +114,17 @@ export function DashboardClient() {
       void refreshData(true);
     };
 
+    const handleDataChanged = () => {
+      void refreshData();
+    };
+
     window.addEventListener("focus", handleFocus);
+    window.addEventListener("signal-tracker:data-changed", handleDataChanged);
 
     return () => {
       window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("signal-tracker:data-changed", handleDataChanged);
     };
   }, []);
 

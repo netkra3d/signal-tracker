@@ -111,6 +111,12 @@ export type ExportPayload = {
   customNotes: Record<string, string>;
 };
 
+type RemoteStateResponse = {
+  enabled: boolean;
+  payload?: ExportPayload | null;
+  updatedAt?: string | null;
+};
+
 type PositionRow = {
   asset: MvpAsset;
   quantity: number;
@@ -441,6 +447,14 @@ function writeStorage<T>(key: string, value: T) {
 
   runStorageMigrations();
   window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+function notifyDataChanged() {
+  if (!ensureBrowser()) {
+    return;
+  }
+
+  window.dispatchEvent(new CustomEvent("signal-tracker:data-changed"));
 }
 
 function normalizeQuote(asset: MvpAsset, quote: QuoteSnapshot | null, candles: Candle[]) {
@@ -807,6 +821,8 @@ export function getSettings() {
 
 export function saveSettings(settings: AppSettings) {
   storageRepository.writeSettings(settings);
+  notifyDataChanged();
+  void pushRemoteState();
 }
 
 export function getCustomNotes() {
@@ -822,6 +838,8 @@ export function saveCustomNote(key: string, note: string) {
   const current = storageRepository.readNotes();
   current[normalizeAssetCode(key)] = note;
   storageRepository.writeNotes(current);
+  notifyDataChanged();
+  void pushRemoteState();
 }
 
 export function validateTradeInput(input: TradeFormInput) {
@@ -921,6 +939,8 @@ export async function saveTrade(input: TradeFormInput) {
 
   const nextTrades = [...trades, record].sort((a, b) => new Date(b.executedAt).getTime() - new Date(a.executedAt).getTime());
   storageRepository.writeTrades(nextTrades);
+  notifyDataChanged();
+  await pushRemoteState();
   return record;
 }
 
@@ -1020,7 +1040,7 @@ export function exportLocalData(): ExportPayload {
   };
 }
 
-export function importLocalData(payload: ExportPayload) {
+function applyImportedData(payload: ExportPayload, syncRemote: boolean) {
   if (payload.version > EXPORT_VERSION) {
     throw new Error("Unsupported backup version.");
   }
@@ -1054,6 +1074,14 @@ export function importLocalData(payload: ExportPayload) {
     version: EXPORT_VERSION,
     lastImportedAt: new Date().toISOString(),
   });
+  notifyDataChanged();
+  if (syncRemote) {
+    void pushRemoteState();
+  }
+}
+
+export function importLocalData(payload: ExportPayload) {
+  applyImportedData(payload, true);
 }
 
 export function getAppUnlocked() {
@@ -1062,4 +1090,50 @@ export function getAppUnlocked() {
 
 export function setAppUnlocked(value: boolean) {
   writeStorage(STORAGE_KEYS.appUnlocked, value);
+}
+
+export async function pullRemoteState() {
+  if (!ensureBrowser()) {
+    return { enabled: false, synced: false } as const;
+  }
+
+  try {
+    const response = await fetch("/api/sync/state", { cache: "no-store" });
+    if (!response.ok) {
+      return { enabled: false, synced: false } as const;
+    }
+
+    const data = (await response.json()) as RemoteStateResponse;
+    if (!data.enabled) {
+      return { enabled: false, synced: false } as const;
+    }
+
+    if (data.payload) {
+      applyImportedData(data.payload, false);
+      return { enabled: true, synced: true } as const;
+    }
+
+    await pushRemoteState();
+    return { enabled: true, synced: false } as const;
+  } catch {
+    return { enabled: false, synced: false } as const;
+  }
+}
+
+export async function pushRemoteState(payload: ExportPayload = exportLocalData()) {
+  if (!ensureBrowser()) {
+    return false;
+  }
+
+  try {
+    const response = await fetch("/api/sync/state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    return response.ok;
+  } catch {
+    return false;
+  }
 }

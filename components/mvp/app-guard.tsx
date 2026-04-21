@@ -1,7 +1,7 @@
 "use client";
 
 import { PropsWithChildren, useEffect, useState } from "react";
-import { getAppUnlocked, getSettings, setAppUnlocked } from "@/lib/mvp-store";
+import { getAppUnlocked, getSettings, pullRemoteState, setAppUnlocked } from "@/lib/mvp-store";
 
 export function AppGuard({ children }: PropsWithChildren) {
   const [ready, setReady] = useState(false);
@@ -10,10 +10,40 @@ export function AppGuard({ children }: PropsWithChildren) {
   const [locked, setLocked] = useState(false);
 
   useEffect(() => {
-    const settings = getSettings();
-    const unlocked = getAppUnlocked();
-    setLocked(settings.appLockEnabled && !unlocked);
-    setReady(true);
+    let active = true;
+
+    async function initialize() {
+      await pullRemoteState();
+
+      if (!active) {
+        return;
+      }
+
+      const settings = getSettings();
+      const unlocked = getAppUnlocked();
+      setLocked(settings.appLockEnabled && !unlocked);
+      setReady(true);
+    }
+
+    void initialize();
+
+    const interval = window.setInterval(() => {
+      if (!document.hidden) {
+        void pullRemoteState();
+      }
+    }, 60_000);
+
+    const handleFocus = () => {
+      void pullRemoteState();
+    };
+
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+    };
   }, []);
 
   if (!ready) {

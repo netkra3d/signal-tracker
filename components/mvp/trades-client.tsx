@@ -14,8 +14,17 @@ export function TradesClient() {
   const assets = listMvpAssets();
 
   useEffect(() => {
-    setTrades(readTrades());
-    void getUsdKrwRate().then(setFx);
+    const refresh = () => {
+      setTrades(readTrades());
+      void getUsdKrwRate().then(setFx);
+    };
+
+    refresh();
+    window.addEventListener("signal-tracker:data-changed", refresh);
+
+    return () => {
+      window.removeEventListener("signal-tracker:data-changed", refresh);
+    };
   }, []);
 
   async function handleCreateTrade(input: TradeFormInput) {
