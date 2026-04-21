@@ -1,21 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { RecentSignals } from "@/components/dashboard/recent-signals";
 import { PositionsTable } from "@/components/dashboard/positions-table";
 import { SummaryCard } from "@/components/dashboard/summary-card";
 import { Card } from "@/components/common/card";
 import {
-  calculateStagePlan,
   getAnalyticsSnapshot,
   getCachedQuote,
   getPositions,
   getRecentSignals,
-  getSettings,
   getSignalLabel,
   getUsdKrwRate,
-  isActionableBuySignal,
   listMvpAssets,
   loadMarketDataForAsset,
   readTrades,
@@ -78,7 +73,6 @@ export function DashboardClient() {
 
   const assets = listMvpAssets();
   const recentTrades = useMemo(() => readTrades().slice(0, 5), []);
-  const settings = getSettings();
 
   async function refreshData(forceRefresh = false) {
     if (forceRefresh) {
@@ -97,70 +91,38 @@ export function DashboardClient() {
   }
 
   useEffect(() => {
-    let active = true;
-
-    async function load(forceRefresh = false) {
-      await Promise.all(assets.map((asset) => loadMarketDataForAsset(asset.code, forceRefresh)));
-      const currentFx = await getUsdKrwRate(forceRefresh);
-
-      if (!active) {
-        return;
-      }
-
-      setFx(currentFx);
-      setAnalytics(getAnalyticsSnapshot());
-      setPositions(getPositions());
-      setSignals(getRecentSignals());
-      setLoading(false);
-      setRefreshing(false);
-    }
-
-    void load();
+    void refreshData();
 
     const interval = window.setInterval(() => {
       if (!document.hidden) {
-        setRefreshing(true);
-        void load(true);
+        void refreshData(true);
       }
     }, 60_000);
 
     const handleFocus = () => {
-      setRefreshing(true);
-      void load(true);
+      void refreshData(true);
     };
 
     window.addEventListener("focus", handleFocus);
 
     return () => {
-      active = false;
       window.clearInterval(interval);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [assets]);
+  }, []);
 
   if (loading || !analytics) {
-    return <div className="text-sm text-slate-300">240분봉 기준 대시보드를 불러오는 중이다.</div>;
+    return <div className="text-sm text-slate-300">대시보드를 불러오는 중이다.</div>;
   }
-
-  const candidates = signals
-    .filter((signal) => signal.signalType === "BUY")
-    .map((signal) => {
-      const asset = assets.find((item) => item.code === signal.assetCode);
-      const quote = getCachedQuote(signal.assetCode);
-      const plan = calculateStagePlan(signal.signalPrice, settings, signal.signalPrice, signal.stopPrice ?? undefined);
-      return { signal, asset, quote, plan };
-    })
-    .filter((item) => item.asset && isActionableBuySignal(item.signal, item.quote))
-    .slice(0, 3);
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-sm uppercase tracking-[0.3em] text-cyan-300">Signal Tracker</p>
-          <h1 className="mt-2 text-4xl font-semibold">240분봉 단일 기준 대시보드</h1>
+          <h1 className="mt-2 text-4xl font-semibold">종목 감시 대시보드</h1>
           <p className="mt-2 text-sm text-slate-400">
-            현재 실제 가격과 신호 기준봉 종가를 분리해서 보여준다. 미국 ETF는 프리마켓이나 애프터마켓이 열리면 그 가격을 우선 반영한다.
+            각 종목 카드에서 현재 실제 가격, 신호 상태, 신호 기준봉 가격을 한 번에 본다.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -168,7 +130,6 @@ export function DashboardClient() {
             type="button"
             onClick={() => {
               if (!refreshing) {
-                setRefreshing(true);
                 void refreshData(true);
               }
             }}
@@ -199,44 +160,9 @@ export function DashboardClient() {
 
       <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
         <PositionsTable positions={positions} />
-        <RecentSignals signals={signals} />
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Card>
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">240분봉 매수 후보</h2>
-            <span className="text-xs text-slate-400">현재가가 1차 진입가에서 ±3% 이내</span>
-          </div>
-          {candidates.length === 0 ? (
-            <p className="text-sm text-slate-400">지금 바로 볼 만한 매수 후보가 없다.</p>
-          ) : (
-            <div className="space-y-3">
-              {candidates.map(({ signal, asset, quote, plan }) => (
-                <div key={signal.id} className="rounded-2xl border border-white/10 bg-black/15 p-4 text-sm">
-                  <div className="flex items-center justify-between">
-                    <p className="font-medium text-white">{signal.assetName}</p>
-                    <span className="text-emerald-300">{getSignalLabel(signal)}</span>
-                  </div>
-                  <p className="mt-2 text-slate-300">{signal.reasonSummary}</p>
-                  <p className="mt-2 text-slate-300">현재가 {formatCurrency(quote?.price ?? 0, asset?.currency ?? "KRW")}</p>
-                  <p className="mt-1 text-slate-300">신호 기준봉 종가 {formatCurrency(signal.signalPrice, asset?.currency ?? "KRW")}</p>
-                  <p className="mt-1 text-slate-300">
-                    1차 {formatCurrency(plan.entry1, asset?.currency ?? "KRW")} / 2차 {formatCurrency(plan.entry2, asset?.currency ?? "KRW")} / 3차{" "}
-                    {formatCurrency(plan.entry3, asset?.currency ?? "KRW")}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
         <Card>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold">최근 거래 5건</h2>
-            <Link href="/trades" className="text-sm text-cyan-300 hover:text-cyan-200">
-              전체 보기
-            </Link>
           </div>
           {recentTrades.length === 0 ? (
             <p className="text-sm text-slate-400">아직 입력한 거래가 없다.</p>
@@ -268,14 +194,29 @@ export function DashboardClient() {
           <h2 className="text-lg font-semibold">현재 실제 가격</h2>
           <span className="text-xs text-slate-400">1분마다 자동 갱신, 창으로 다시 돌아오면 즉시 새로고침</span>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {assets.map((asset) => {
             const quote = getCachedQuote(asset.code);
+            const signal = signals.find((item) => item.assetCode === asset.code) ?? null;
+
             return (
               <div key={asset.code} className="rounded-2xl border border-white/10 bg-black/15 p-4 text-sm">
                 <p className="font-medium text-white">{asset.name}</p>
-                <p className="mt-2 text-cyan-100">{formatCurrency(quote?.price ?? 0, asset.currency)}</p>
-                <p className="mt-1 text-slate-400">{getQuoteMetaLabel(asset.marketType, quote)}</p>
+                <p className="mt-2 text-2xl font-semibold text-cyan-100">{formatCurrency(quote?.price ?? 0, asset.currency)}</p>
+
+                {signal ? (
+                  <div className="mt-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+                    <p className="font-medium text-white">
+                      {asset.name} ({getSignalLabel(signal)})
+                    </p>
+                    <p className="mt-2 text-slate-300">
+                      신호 기준봉 종가 {formatCurrency(signal.signalPrice, asset.currency)}
+                      {signal.targetPrice ? ` / 목표가 ${formatCurrency(signal.targetPrice, asset.currency)}` : ""}
+                    </p>
+                  </div>
+                ) : null}
+
+                <p className="mt-3 text-slate-400">{getQuoteMetaLabel(asset.marketType, quote)}</p>
                 <p className="mt-1 text-slate-400">{quote ? formatDateTime(quote.timestamp) : "시각 없음"}</p>
                 <p className="mt-1 text-slate-500">
                   {quote?.source ?? "cache"} / {getQuoteStatusLabel(asset.marketType, quote)}
