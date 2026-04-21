@@ -82,6 +82,15 @@ export function SettingsClient() {
       {message ? <div className="rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100">{message}</div> : null}
 
       <Card>
+        <h2 className="mb-4 text-lg font-semibold">현재 동기화 방식</h2>
+        <div className="space-y-3 text-sm text-slate-300">
+          <p>지금은 로그인 없이 네 기기끼리 같은 데이터를 공유하는 개인용 동기화 모드입니다.</p>
+          <p>다른 사람이 같은 앱에 접속해 저장하면 같은 데이터에 함께 반영될 수 있으므로, 공개 서비스 용도로는 아직 적합하지 않습니다.</p>
+          <p className="text-slate-400">나중에 공개하거나 유료화할 때는 로그인과 사용자별 데이터 구조로 바꿔야 합니다.</p>
+        </div>
+      </Card>
+
+      <Card>
         <h2 className="mb-4 text-lg font-semibold">백업 파일 관리</h2>
         <div className="space-y-4 text-sm">
           <p>거래 기록과 메모를 JSON 파일로 내보내거나, 이전에 저장한 백업 파일을 다시 불러올 수 있습니다.</p>
